@@ -33,3 +33,10 @@ STORAGE_DIR = "storage"
 PLANTS_FILE = f"{STORAGE_DIR}/plants.parquet"
 FACILITY_OUTAGES_FILE = f"{STORAGE_DIR}/facility_outages.parquet"
 US_OUTAGES_FILE = f"{STORAGE_DIR}/us_outages.parquet"
+
+# Delta Table Configuration
+DELTA_DIR = f"{STORAGE_DIR}/delta"
+PLANTS_DELTA = f"{DELTA_DIR}/plants"
+FACILITY_OUTAGES_DELTA = f"{DELTA_DIR}/facility_outages"
+US_OUTAGES_DELTA = f"{DELTA_DIR}/us_outages"
+STATE_FILE = f"{DELTA_DIR}/state.json"
