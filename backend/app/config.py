@@ -3,6 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     """Configuración de la API"""
+
     # Metadata
     app_title: str = "Nuclear Outages API"
     app_version: str = "1.0.0"
@@ -14,7 +15,6 @@ class Settings(BaseSettings):
     facility_outages_file: str = "storage/facility_outages.parquet"
     us_outages_file: str = "storage/us_outages.parquet"
     metadata_file: str = "storage/metadata.json"
-
 
     # Paginación
     default_limit: int = 100

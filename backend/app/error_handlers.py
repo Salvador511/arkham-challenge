@@ -1,4 +1,5 @@
 """Error handlers - centralized exception handling for the API"""
+
 import logging
 
 from fastapi import FastAPI, Request

@@ -1,4 +1,5 @@
 """Data Service - Load and filter parquet files"""
+
 import logging
 from typing import Any
 
@@ -33,9 +34,7 @@ class DataService:
             limit = settings.max_limit
 
         filepath = (
-            settings.facility_outages_file
-            if dataset == "facility"
-            else settings.us_outages_file
+            settings.facility_outages_file if dataset == "facility" else settings.us_outages_file
         )
 
         try:
@@ -78,9 +77,7 @@ class DataService:
         if dataset == "facility":
             try:
                 plants = pd.read_parquet(settings.plants_file)
-                paginated_df = paginated_df.merge(
-                    plants, on="facility_id", how="left"
-                )
+                paginated_df = paginated_df.merge(plants, on="facility_id", how="left")
             except Exception as e:
                 logger.error(f"Error joining with plants: {e}")
 

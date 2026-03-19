@@ -14,9 +14,7 @@ async def get_data(
         None,
         description="Dataset to fetch: 'facility' or 'us'. If not specified, returns both.",
     ),
-    date_from: str | None = Query(
-        None, description="Filter from date (YYYY-MM-DD)"
-    ),
+    date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)"),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)"),
     facility_id: str | None = Query(
         None, description="Filter by facility_id (only for 'facility' dataset)"

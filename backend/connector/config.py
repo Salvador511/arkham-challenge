@@ -10,7 +10,14 @@ RETRY_DELAY = 1
 # Data Configuration
 PAGE_SIZE = 5000
 DATA_FIELDS = ["capacity", "outage", "percentOutage"]
-REQUIRED_FIELDS_FACILITY = ["period", "facility", "facilityName", "capacity", "outage", "percentOutage"]
+REQUIRED_FIELDS_FACILITY = [
+    "period",
+    "facility",
+    "facilityName",
+    "capacity",
+    "outage",
+    "percentOutage",
+]
 REQUIRED_FIELDS_US = ["period", "capacity", "outage", "percentOutage"]
 
 # Column Mapping (API names → database names)

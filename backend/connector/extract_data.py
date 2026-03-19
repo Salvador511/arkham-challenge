@@ -71,9 +71,7 @@ def fetch_page(url: str, api_key: str, offset: int, length: int) -> dict | None:
 
             # Check for invalid credentials
             if response.status_code in (401, 403):
-                raise InvalidAPIKeyError(
-                    "Invalid API credentials. Check EIA_API_KEY."
-                )
+                raise InvalidAPIKeyError("Invalid API credentials. Check EIA_API_KEY.")
 
             # Success
             if response.status_code == 200:

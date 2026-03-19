@@ -24,6 +24,7 @@ register_error_handlers(app)
 
 app.include_router(data.router)
 
+
 @app.get("/health")
 async def health_check():
     """Verifica que la API está funcionando"""
