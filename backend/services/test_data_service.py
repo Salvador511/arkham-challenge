@@ -27,8 +27,11 @@ class TestDataServiceValidation:
         with pytest.raises(ValidationError, match="limit must be >= 1"):
             DataService.get_dataset("facility", limit=0)
 
-    def test_facility_id_only_for_facility_dataset(self):
+    @patch("services.data_service.pd.read_parquet")
+    def test_facility_id_only_for_facility_dataset(self, mock_read, sample_us_dataframe):
         """Test that facility_id parameter only works with 'facility' dataset."""
+        mock_read.return_value = sample_us_dataframe
+
         with pytest.raises(ValidationError, match="facility_id parameter only allowed"):
             DataService.get_dataset("us", facility_id="F001")
 
