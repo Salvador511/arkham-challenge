@@ -1,6 +1,5 @@
 """Unit tests for connector validation functions."""
 
-
 # Import from the connector module
 import sys
 from pathlib import Path

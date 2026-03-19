@@ -1,6 +1,5 @@
 """Unit tests for custom exceptions."""
 
-
 from app.exceptions import (
     APIException,
     DataNotFoundError,
