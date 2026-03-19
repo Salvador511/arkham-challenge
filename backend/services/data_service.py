@@ -1,11 +1,11 @@
 """Data Service - Load and filter parquet files"""
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import pandas as pd
 
 from app.config import settings
-from app.exceptions import ValidationError, DataNotFoundError, ProcessingError
+from app.exceptions import DataNotFoundError, ProcessingError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -16,12 +16,12 @@ class DataService:
     @staticmethod
     def get_dataset(
         dataset: str,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
-        facility_id: Optional[str] = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        facility_id: str | None = None,
         offset: int = 0,
         limit: int = 100,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Load dataset from parquet and apply filters + pagination
         """
@@ -41,24 +41,24 @@ class DataService:
         try:
             df = pd.read_parquet(filepath)
         except FileNotFoundError:
-            raise DataNotFoundError(f"Dataset '{dataset}' not found")
+            raise DataNotFoundError(f"Dataset '{dataset}' not found") from None
         except Exception as e:
             logger.error(f"Error reading {filepath}: {e}")
-            raise ProcessingError("Failed to read dataset")
+            raise ProcessingError("Failed to read dataset") from e
 
         df["date"] = pd.to_datetime(df["date"])
 
         if date_from:
             try:
                 df = df[df["date"] >= pd.to_datetime(date_from)]
-            except Exception:
-                raise ValidationError("Invalid date_from format. Use YYYY-MM-DD")
+            except Exception as exc:
+                raise ValidationError("Invalid date_from format. Use YYYY-MM-DD") from exc
 
         if date_to:
             try:
                 df = df[df["date"] <= pd.to_datetime(date_to)]
-            except Exception:
-                raise ValidationError("Invalid date_to format. Use YYYY-MM-DD")
+            except Exception as exc:
+                raise ValidationError("Invalid date_to format. Use YYYY-MM-DD") from exc
 
         if date_from and date_to:
             if pd.to_datetime(date_from) > pd.to_datetime(date_to):

@@ -1,5 +1,5 @@
 """Response schemas for standardized API responses"""
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -9,8 +9,8 @@ class ErrorResponse(BaseModel):
 
     status: str = "error"
     message: str
-    error_code: Optional[str] = None
-    details: Optional[Any] = None
+    error_code: str | None = None
+    details: Any | None = None
 
     class Config:
         json_schema_extra = {
@@ -28,7 +28,7 @@ class SuccessResponse(BaseModel):
 
     status: str = "success"
     data: Any
-    metadata: Optional[dict] = None
+    metadata: dict | None = None
 
     class Config:
         json_schema_extra = {

@@ -1,5 +1,4 @@
 """Data endpoint - GET /data"""
-from typing import Optional
 
 from fastapi import APIRouter, Query
 
@@ -11,15 +10,15 @@ router = APIRouter()
 
 @router.get("/data")
 async def get_data(
-    dataset: Optional[str] = Query(
+    dataset: str | None = Query(
         None,
         description="Dataset to fetch: 'facility' or 'us'. If not specified, returns both.",
     ),
-    date_from: Optional[str] = Query(
+    date_from: str | None = Query(
         None, description="Filter from date (YYYY-MM-DD)"
     ),
-    date_to: Optional[str] = Query(None, description="Filter to date (YYYY-MM-DD)"),
-    facility_id: Optional[str] = Query(
+    date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)"),
+    facility_id: str | None = Query(
         None, description="Filter by facility_id (only for 'facility' dataset)"
     ),
     offset: int = Query(0, ge=0, description="Pagination offset"),

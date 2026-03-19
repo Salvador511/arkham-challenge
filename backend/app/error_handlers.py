@@ -1,9 +1,10 @@
 """Error handlers - centralized exception handling for the API"""
 import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.exceptions import APIException, ValidationError, DataNotFoundError, ProcessingError
+from app.exceptions import APIException, DataNotFoundError, ProcessingError, ValidationError
 from app.schemas.responses import ErrorResponse
 
 logger = logging.getLogger(__name__)

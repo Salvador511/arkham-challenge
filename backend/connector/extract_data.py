@@ -14,12 +14,10 @@ Requirements:
 import logging
 import os
 import time
-from typing import Any, Optional
+from typing import Any
 
 import pandas as pd
 import requests
-from dotenv import load_dotenv
-
 from config import (
     API_TIMEOUT,
     COLUMN_MAPPING,
@@ -32,10 +30,10 @@ from config import (
     REQUIRED_FIELDS_FACILITY,
     REQUIRED_FIELDS_US,
     RETRY_DELAY,
-    STORAGE_DIR,
     US_OUTAGES_FILE,
     US_OUTAGES_URL,
 )
+from dotenv import load_dotenv
 from exceptions import APIError, InvalidAPIKeyError, NetworkError
 
 # Setup logging
@@ -47,7 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def fetch_page(url: str, api_key: str, offset: int, length: int) -> Optional[dict]:
+def fetch_page(url: str, api_key: str, offset: int, length: int) -> dict | None:
     """
     Fetch a single page from EIA API with automatic retries.
 
@@ -107,7 +105,7 @@ def fetch_page(url: str, api_key: str, offset: int, length: int) -> Optional[dic
                 time.sleep(RETRY_DELAY)
                 continue
 
-            raise NetworkError(f"Network error after {MAX_RETRIES} retries: {exc}")
+            raise NetworkError(f"Network error after {MAX_RETRIES} retries: {exc}") from exc
 
     return None
 
