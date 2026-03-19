@@ -1,6 +1,5 @@
 """Unit tests for connector validation functions."""
 
-import pytest
 
 # Import from the connector module
 import sys

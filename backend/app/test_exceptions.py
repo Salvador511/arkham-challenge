@@ -1,6 +1,5 @@
 """Unit tests for custom exceptions."""
 
-import pytest
 
 from app.exceptions import (
     APIException,
