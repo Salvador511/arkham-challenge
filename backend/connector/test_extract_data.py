@@ -109,3 +109,209 @@ class TestExtractPlants:
 
         # Check there are no duplicate facility_ids
         assert len(plants_df) == len(plants_df["facility_id"].unique())
+
+
+class TestRunFullExtraction:
+    """Tests for run_full_extraction function."""
+
+    def test_run_full_extraction_success(
+        self, sample_facility_dataframe, sample_us_dataframe, mocker
+    ):
+        """Test successful full extraction on first run."""
+        from connector.extract_data import run_full_extraction
+
+        # Mock external dependencies
+        mocker.patch("connector.extract_data.fetch_all_data")
+        mocker.patch("connector.extract_data.transform_data")
+        mocker.patch("connector.extract_data.extract_plants")
+        mocker.patch("connector.extract_data.save_delta")
+        mocker.patch("connector.extract_data.save_final_output")
+        mocker.patch("connector.extract_data.save_state")
+
+        # Setup mock side effects
+        import connector.extract_data as extract_module
+
+        extract_module.transform_data.side_effect = [
+            sample_facility_dataframe,
+            sample_us_dataframe,
+        ]
+        extract_module.extract_plants.return_value = sample_facility_dataframe[
+            ["facility_id", "facility_name"]
+        ].drop_duplicates()
+
+        # Call the function
+        facility_df, us_df, plants_df = run_full_extraction("test_api_key")
+
+        # Verify it returns dataframes
+        assert facility_df is not None
+        assert us_df is not None
+        assert plants_df is not None
+
+        # Verify save functions were called
+        assert extract_module.save_delta.call_count == 3
+        assert extract_module.save_final_output.called
+        assert extract_module.save_state.called
+
+
+class TestRunIncrementalExtraction:
+    """Tests for run_incremental_extraction function."""
+
+    def test_run_incremental_extraction_with_data(
+        self, sample_facility_dataframe, sample_us_dataframe, mocker
+    ):
+        """Test incremental extraction with new data."""
+        from connector.extract_data import run_incremental_extraction
+
+        # Mock external dependencies
+        mocker.patch("connector.extract_data.fetch_last_data")
+        mocker.patch("connector.extract_data.transform_data")
+        mocker.patch("connector.extract_data.extract_plants")
+        mocker.patch("connector.extract_data.merge_dataframes")
+        mocker.patch("connector.extract_data.vacuum_delta")
+        mocker.patch("connector.extract_data.save_final_output")
+        mocker.patch("connector.extract_data.save_state")
+
+        import connector.extract_data as extract_module
+
+        extract_module.transform_data.side_effect = [
+            sample_facility_dataframe,
+            sample_us_dataframe,
+        ]
+        extract_module.extract_plants.return_value = sample_facility_dataframe[
+            ["facility_id", "facility_name"]
+        ].drop_duplicates()
+
+        state = {
+            "facility_outages": {"last_extraction_date": "2024-01-01"},
+            "us_outages": {"last_extraction_date": "2024-01-01"},
+        }
+
+        facility_df, us_df, plants_df = run_incremental_extraction("test_api_key", state)
+
+        # Verify it returns dataframes
+        assert facility_df is not None
+        assert us_df is not None
+
+        # Verify merge and vacuum were called
+        assert extract_module.merge_dataframes.called
+        assert extract_module.vacuum_delta.called
+        assert extract_module.save_final_output.called
+
+    def test_run_incremental_extraction_empty_data(self, mocker):
+        """Test incremental extraction with no new data."""
+        import pandas as pd
+
+        from connector.extract_data import run_incremental_extraction
+
+        mocker.patch("connector.extract_data.fetch_last_data", return_value=[])
+        mocker.patch("connector.extract_data.transform_data", return_value=pd.DataFrame())
+        mocker.patch("connector.extract_data.extract_plants", return_value=pd.DataFrame())
+        mocker.patch("connector.extract_data.save_final_output")
+        mocker.patch("connector.extract_data.save_state")
+
+        state = {
+            "facility_outages": {"last_extraction_date": "2024-01-01"},
+            "us_outages": {"last_extraction_date": "2024-01-01"},
+        }
+
+        facility_df, us_df, plants_df = run_incremental_extraction("test_api_key", state)
+
+        # Verify empty dataframes are returned
+        assert len(facility_df) == 0
+        assert len(us_df) == 0
+
+
+class TestSaveFinalOutput:
+    """Tests for save_final_output function."""
+
+    def test_save_final_output_success(
+        self, sample_facility_dataframe, sample_us_dataframe, sample_plants_dataframe, mocker
+    ):
+        """Test saving final output from Delta tables."""
+        from connector.extract_data import save_final_output
+
+        # Mock DeltaTable
+        mock_delta_table = mocker.MagicMock()
+        mock_delta_class = mocker.patch("connector.extract_data.DeltaTable")
+        mock_delta_class.side_effect = [
+            mock_delta_table,
+            mock_delta_table,
+            mock_delta_table,
+        ]
+
+        mock_delta_table.to_pandas.side_effect = [
+            sample_facility_dataframe,
+            sample_us_dataframe,
+            sample_plants_dataframe,
+        ]
+
+        # Mock parquet saving
+        mocker.patch("pandas.DataFrame.to_parquet")
+
+        # Call the function
+        save_final_output("/delta/path", "/us/path", "/plants/path")
+
+        # Verify DeltaTable was created for each path
+        assert mock_delta_class.call_count == 3
+        assert mock_delta_table.to_pandas.call_count == 3
+
+    def test_save_final_output_with_empty_dataframe(self, mocker):
+        """Test save_final_output skips empty DataFrames."""
+        import pandas as pd
+
+        from connector.extract_data import save_final_output
+
+        mock_delta_table = mocker.MagicMock()
+        mock_delta_class = mocker.patch("connector.extract_data.DeltaTable")
+        mock_delta_class.side_effect = [
+            mock_delta_table,
+            mock_delta_table,
+            mock_delta_table,
+        ]
+
+        # Return empty dataframes
+        mock_delta_table.to_pandas.side_effect = [
+            pd.DataFrame(),
+            pd.DataFrame(),
+            pd.DataFrame(),
+        ]
+
+        # Mock parquet saving
+        mocker.patch("pandas.DataFrame.to_parquet")
+
+        # Call should not raise
+        save_final_output("/delta/path", "/us/path", "/plants/path")
+
+
+class TestPrintSummary:
+    """Tests for print_summary function."""
+
+    def test_print_summary_first_run(self, sample_facility_dataframe, capsys):
+        """Test print_summary displays first run info."""
+        from connector.extract_data import print_summary
+
+        print_summary(
+            True,
+            sample_facility_dataframe,
+            sample_facility_dataframe[:2],
+            sample_facility_dataframe[:3],
+        )
+
+        captured = capsys.readouterr()
+        assert "FULL (first run)" in captured.out
+        assert "5 rows processed" in captured.out
+
+    def test_print_summary_incremental_run(self, sample_facility_dataframe, capsys):
+        """Test print_summary displays incremental run info."""
+        from connector.extract_data import print_summary
+
+        print_summary(
+            False,
+            sample_facility_dataframe,
+            sample_facility_dataframe[:1],
+            sample_facility_dataframe[:2],
+        )
+
+        captured = capsys.readouterr()
+        assert "INCREMENTAL" in captured.out
+        assert "5 rows processed" in captured.out

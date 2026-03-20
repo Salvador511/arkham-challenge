@@ -1,5 +1,12 @@
 """Configuration constants for EIA Data Connector."""
 
+from pathlib import Path
+
+# Get the absolute path to the backend directory (parent of connector)
+CONNECTOR_DIR = Path(__file__).parent.resolve()
+BACKEND_DIR = CONNECTOR_DIR.parent
+STORAGE_DIR = BACKEND_DIR / "storage"
+
 # API Configuration
 FACILITY_OUTAGES_URL = "https://api.eia.gov/v2/nuclear-outages/facility-nuclear-outages/data/"
 US_OUTAGES_URL = "https://api.eia.gov/v2/nuclear-outages/us-nuclear-outages/data/"
@@ -28,15 +35,14 @@ COLUMN_MAPPING = {
     "percentOutage": "percent_outage",
 }
 
-# Storage Configuration
-STORAGE_DIR = "storage"
-PLANTS_FILE = f"{STORAGE_DIR}/plants.parquet"
-FACILITY_OUTAGES_FILE = f"{STORAGE_DIR}/facility_outages.parquet"
-US_OUTAGES_FILE = f"{STORAGE_DIR}/us_outages.parquet"
+# Parquet Storage Paths
+PLANTS_FILE = str(STORAGE_DIR / "plants.parquet")
+FACILITY_OUTAGES_FILE = str(STORAGE_DIR / "facility_outages.parquet")
+US_OUTAGES_FILE = str(STORAGE_DIR / "us_outages.parquet")
 
 # Delta Table Configuration
-DELTA_DIR = f"{STORAGE_DIR}/delta"
-PLANTS_DELTA = f"{DELTA_DIR}/plants"
-FACILITY_OUTAGES_DELTA = f"{DELTA_DIR}/facility_outages"
-US_OUTAGES_DELTA = f"{DELTA_DIR}/us_outages"
-STATE_FILE = f"{DELTA_DIR}/state.json"
+DELTA_DIR = str(STORAGE_DIR / "delta")
+PLANTS_DELTA = str(STORAGE_DIR / "delta" / "plants")
+FACILITY_OUTAGES_DELTA = str(STORAGE_DIR / "delta" / "facility_outages")
+US_OUTAGES_DELTA = str(STORAGE_DIR / "delta" / "us_outages")
+STATE_FILE = str(STORAGE_DIR / "delta" / "state.json")

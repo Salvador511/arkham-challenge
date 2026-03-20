@@ -3,11 +3,9 @@
 import json
 import logging
 import os
-from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from deltalake import DeltaTable, write_deltalake
 from config import (
     DELTA_DIR,
     FACILITY_OUTAGES_DELTA,
@@ -15,6 +13,7 @@ from config import (
     STATE_FILE,
     US_OUTAGES_DELTA,
 )
+from deltalake import DeltaTable, write_deltalake
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +48,7 @@ def load_state() -> dict:
         }
 
     try:
-        with open(STATE_FILE, "r") as f:
+        with open(STATE_FILE) as f:
             return json.load(f)
     except Exception as exc:
         logger.error("Failed to load state: %s", exc)
@@ -67,7 +66,6 @@ def save_state(state: dict) -> None:
         Exception: If save fails
     """
     try:
-        # Create delta directory if needed
         os.makedirs(DELTA_DIR, exist_ok=True)
 
         with open(STATE_FILE, "w") as f:
@@ -78,11 +76,7 @@ def save_state(state: dict) -> None:
         raise
 
 
-def save_delta(
-    df: pd.DataFrame,
-    table_path: str,
-    mode: str = "overwrite"
-) -> None:
+def save_delta(df: pd.DataFrame, table_path: str, mode: str = "overwrite") -> None:
     """
     Save DataFrame as Delta table.
 
@@ -95,7 +89,6 @@ def save_delta(
         Exception: If save fails
     """
     try:
-        # Create delta directory if needed
         os.makedirs(DELTA_DIR, exist_ok=True)
 
         write_deltalake(table_path, df, mode=mode)
@@ -105,11 +98,7 @@ def save_delta(
         raise
 
 
-def merge_dataframes(
-    table_path: str,
-    new_df: pd.DataFrame,
-    merge_keys: list[str]
-) -> None:
+def merge_dataframes(table_path: str, new_df: pd.DataFrame, merge_keys: list[str]) -> None:
     """
     Merge new data into Delta table.
 
@@ -123,38 +112,53 @@ def merge_dataframes(
     """
     try:
         if not Path(table_path).exists():
-            # Table doesn't exist yet, create it
             write_deltalake(table_path, new_df, mode="overwrite")
             logger.info("Created new Delta table: %s", table_path)
             return
 
-        # Table exists, do merge
-        delta_table = DeltaTable(table_path)
+        try:
+            delta_table = DeltaTable(table_path)
+        except Exception as e:
+            logger.warning("Delta table is corrupted or invalid, recreating: %s", e)
+            write_deltalake(table_path, new_df, mode="overwrite")
+            logger.info("Recreated Delta table: %s", table_path)
+            return
 
-        # Create merge predicate (e.g., "t.facility_id = s.facility_id AND t.date = s.date")
-        merge_predicate = " AND ".join(
-            [f"t.{key} = s.{key}" for key in merge_keys]
-        )
+        merge_predicate = " AND ".join([f"t.{key} = s.{key}" for key in merge_keys])
 
-        # Perform MERGE with aliases t (target) and s (source)
         (
-            delta_table.merge(
-                new_df,
-                predicate=merge_predicate,
-                target_alias="t",
-                source_alias="s"
-            )
+            delta_table.merge(new_df, predicate=merge_predicate, target_alias="t", source_alias="s")
             .when_matched_update_all()
             .when_not_matched_insert_all()
             .execute()
         )
 
-        logger.info(
-            "Merged %s rows into Delta table: %s",
-            len(new_df),
-            table_path
-        )
+        logger.info("Merged %s rows into Delta table: %s", len(new_df), table_path)
 
     except Exception as exc:
         logger.error("Failed to merge data into Delta table: %s", exc)
+        raise
+
+
+def vacuum_delta(table_path: str) -> None:
+    """
+    Clean up obsolete files from Delta table after merge.
+
+    Args:
+        table_path: Path to Delta table
+
+    Raises:
+        Exception: If vacuum fails
+    """
+    try:
+        if not Path(table_path).exists():
+            logger.warning("Delta table not found for vacuum: %s", table_path)
+            return
+
+        delta_table = DeltaTable(table_path)
+        delta_table.vacuum(retention_hours=168)
+        logger.info("Vacuumed Delta table: %s", table_path)
+
+    except Exception as exc:
+        logger.error("Failed to vacuum Delta table: %s", exc)
         raise
