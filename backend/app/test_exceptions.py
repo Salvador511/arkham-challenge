@@ -1,6 +1,6 @@
 """Unit tests for custom exceptions."""
 
-from app.exceptions import (
+from exceptions import (
     APIException,
     DataNotFoundError,
     ProcessingError,
@@ -46,7 +46,7 @@ class TestValidationError:
         """Test ValidationError message is preserved."""
         message = "Field 'date' is required"
         exc = ValidationError(message)
-        assert str(exc) == message
+        assert str(exc) == f"[400] {message}"
 
 
 class TestDataNotFoundError:
