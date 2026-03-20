@@ -18,7 +18,10 @@ from typing import Any
 
 import pandas as pd
 import requests
-from config import (
+from deltalake import DeltaTable
+from dotenv import load_dotenv
+
+from connector.config import (
     API_TIMEOUT,
     COLUMN_MAPPING,
     DATA_FIELDS,
@@ -36,10 +39,7 @@ from config import (
     US_OUTAGES_FILE,
     US_OUTAGES_URL,
 )
-from deltalake import DeltaTable
-from dotenv import load_dotenv
-from exceptions import APIError, InvalidAPIKeyError, NetworkError
-from state_manager import (
+from connector.state_manager import (
     delta_tables_exist,
     load_state,
     merge_dataframes,
@@ -47,6 +47,7 @@ from state_manager import (
     save_state,
     vacuum_delta,
 )
+from exceptions import APIError, InvalidAPIKeyError, NetworkError
 
 # Setup logging
 logging.basicConfig(
@@ -285,27 +286,6 @@ def extract_plants(facility_df: pd.DataFrame) -> pd.DataFrame:
 
     logger.info("Extracted %s unique plants", len(df))
     return df
-
-
-def save_parquet(df: pd.DataFrame, filepath: str) -> None:
-    """
-    Save DataFrame to Parquet file.
-
-    Args:
-        df: DataFrame to save
-        filepath: Path where to save
-
-    Raises:
-        Exception: If save fails
-    """
-    try:
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-
-        df.to_parquet(filepath, index=False)
-        logger.info("Saved %s rows to %s", len(df), filepath)
-    except Exception as exc:
-        logger.error("Failed to save parquet file: %s", exc)
-        raise
 
 
 def save_final_output(facility_delta_path: str, us_delta_path: str, plants_delta_path: str) -> None:

@@ -5,8 +5,8 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.exceptions import APIException, DataNotFoundError, ProcessingError, ValidationError
 from app.schemas.responses import ErrorResponse
+from exceptions import APIException, DataNotFoundError, ProcessingError, ValidationError
 
 logger = logging.getLogger(__name__)
 

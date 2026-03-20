@@ -1,8 +1,8 @@
-"""Data endpoint - GET /data"""
+"""Data endpoints - GET /data"""
 
 from fastapi import APIRouter, Query
 
-from app.exceptions import ValidationError
+from exceptions import ValidationError
 from services.data_service import DataService
 
 router = APIRouter()

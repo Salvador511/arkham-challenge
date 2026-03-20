@@ -6,14 +6,15 @@ import os
 from pathlib import Path
 
 import pandas as pd
-from config import (
+from deltalake import DeltaTable, write_deltalake
+
+from connector.config import (
     DELTA_DIR,
     FACILITY_OUTAGES_DELTA,
     PLANTS_DELTA,
     STATE_FILE,
     US_OUTAGES_DELTA,
 )
-from deltalake import DeltaTable, write_deltalake
 
 logger = logging.getLogger(__name__)
 
