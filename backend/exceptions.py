@@ -154,7 +154,9 @@ class ExtractionMessages:
     """Centralized extraction/refresh response messages."""
 
     # Full Extraction (First Run)
-    FULL_EXTRACTION_STARTED = "First extraction is in progress. This may take several minutes (2-5 min)."
+    FULL_EXTRACTION_STARTED = (
+        "First extraction is in progress. This may take several minutes (2-5 min)."
+    )
     FULL_EXTRACTION_RETRY_SECONDS = 300
 
     # Incremental Extraction (Subsequent Runs)
@@ -168,5 +170,3 @@ class ExtractionMessages:
     # Error Messages
     EXTRACTION_FAILED = "Data extraction failed"
     UNEXPECTED_ERROR = "An unexpected error occurred during extraction"
-
-
