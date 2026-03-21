@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from exceptions import DataNotFoundError, ValidationError
+from exceptions import DataNotFoundError, ProcessingError, ValidationError
 from services.data_service import DataService
 
 
@@ -130,3 +130,89 @@ class TestDataServiceMissingFile:
 
         with pytest.raises(DataNotFoundError, match="Dataset 'facility' not found"):
             DataService.get_dataset("facility")
+
+    @patch("services.data_service.pd.read_parquet")
+    def test_processing_error_on_read_exception(self, mock_read):
+        """Test that non-FileNotFound exceptions raise ProcessingError."""
+        mock_read.side_effect = Exception("Parquet read error")
+
+        with pytest.raises(ProcessingError, match="Failed to read dataset"):
+            DataService.get_dataset("us")
+
+
+class TestDataServiceFacilityFiltering:
+    """Tests for facility-specific filtering."""
+
+    @patch("services.data_service.pd.read_parquet")
+    def test_facility_id_filtering(self, mock_read):
+        """Test facility_id filtering for facility dataset."""
+        df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=3),
+                "facility_id": ["F001", "F002", "F001"],
+                "capacity": [1000, 2000, 1000],
+                "outage": [100, 200, 100],
+                "percent_outage": [10.0, 10.0, 10.0],
+            }
+        )
+        # Mock returns facility data first, then handle merge with plants
+        mock_read.side_effect = [df, FileNotFoundError()]
+
+        result = DataService.get_dataset("facility", facility_id="F001")
+
+        assert result["total_count"] == 2
+        assert all(record["facility_id"] == "F001" for record in result["data"])
+
+    @patch("services.data_service.pd.read_parquet")
+    def test_facility_plants_merge_success(self, mock_read):
+        """Test successful merge with plants data."""
+        facility_df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=2),
+                "facility_id": ["F001", "F002"],
+                "capacity": [1000, 2000],
+                "outage": [100, 200],
+                "percent_outage": [10.0, 10.0],
+            }
+        )
+        plants_df = pd.DataFrame(
+            {
+                "facility_id": ["F001", "F002"],
+                "plant_name": ["Plant A", "Plant B"],
+            }
+        )
+        mock_read.side_effect = [facility_df, plants_df]
+
+        result = DataService.get_dataset("facility")
+
+        # Check if merge worked - should have plant_name column
+        assert result["returned"] == 2
+        record = result["data"][0]
+        assert "plant_name" in record
+
+    @patch("services.data_service.pd.read_parquet")
+    def test_facility_plants_merge_error_handling(self, mock_read):
+        """Test that plant merge errors are logged but don't break the response."""
+        facility_df = pd.DataFrame(
+            {
+                "date": pd.date_range("2024-01-01", periods=1),
+                "facility_id": ["F001"],
+                "capacity": [1000],
+                "outage": [100],
+                "percent_outage": [10.0],
+            }
+        )
+
+        def side_effect(*args, **kwargs):
+            if mock_read.call_count == 1:
+                return facility_df
+            raise Exception("Plants file error")
+
+        mock_read.side_effect = side_effect
+
+        # Should not raise, just return facility data without plant info
+        result = DataService.get_dataset("facility")
+
+        assert result["returned"] == 1
+        assert result["data"][0]["facility_id"] == "F001"
+
