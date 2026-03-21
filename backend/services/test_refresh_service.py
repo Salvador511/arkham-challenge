@@ -2,7 +2,6 @@
 
 import os
 import time
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -171,9 +170,7 @@ class TestTriggerExtractionAsync:
 
     @patch("services.refresh_service.delta_tables_exist")
     @patch("services.refresh_service.connector_main")
-    def test_full_extraction_returns_202(
-        self, mock_connector, mock_delta_exists, cleanup_lock
-    ):
+    def test_full_extraction_returns_202(self, mock_connector, mock_delta_exists, cleanup_lock):
         """Test that full extraction returns 202 Accepted."""
         mock_delta_exists.return_value = False
         background_tasks = MagicMock()
@@ -219,9 +216,7 @@ class TestTriggerExtractionAsync:
         assert response["error"] == "ExtractionError"
 
     @patch("services.refresh_service.delta_tables_exist")
-    def test_extraction_already_in_progress_returns_202(
-        self, mock_delta_exists, cleanup_lock
-    ):
+    def test_extraction_already_in_progress_returns_202(self, mock_delta_exists, cleanup_lock):
         """Test that locked extraction returns 202 Accepted."""
         acquire_lock()
         background_tasks = MagicMock()

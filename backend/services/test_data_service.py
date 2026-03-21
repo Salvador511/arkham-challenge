@@ -215,4 +215,3 @@ class TestDataServiceFacilityFiltering:
 
         assert result["returned"] == 1
         assert result["data"][0]["facility_id"] == "F001"
-
