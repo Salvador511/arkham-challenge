@@ -1,6 +1,7 @@
 import DesktopSidebar from '~/UI/Navbars/DesktopSidebar'
 import Home from '~/Home/Home'
 import OutagesTable from '~/OutagesTable/OutagesTable'
+import Graphs from '~/Graphs/Graphs'
 import { Alert, Snackbar } from '@mui/material'
 import { styled } from '@mui/material/styles'
 import getClassPrefixer from '~/UI/classPrefixer'
@@ -124,7 +125,7 @@ const App = ({
             type='facilityOutage'
           />
         )}
-        {/* {selectedCategory === 'Graphs' && <Graphs />} */}
+        {selectedCategory === 'Graphs' && <Graphs />}
       </div>
       <Snackbar
         open={Boolean(snackbarMessage)}
