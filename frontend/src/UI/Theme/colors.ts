@@ -24,11 +24,11 @@ const getThemeColor = (color: string) => {
   }
 }
 
-const contrast = getThemeColor('#2b8346')
-const primary = getThemeColor('#F59E0B')
+const contrast = getThemeColor('#FFFFFF')
+const primary = getThemeColor('#FF8000')
 const text = getThemeColor('#f1f1f1')
 const background = getThemeColor('#303030')
-const gray = getThemeColor('#3c3c3c')
+const gray = getThemeColor('#5A5A5A')
 const red = getThemeColor('#f24b42')
 const darkRed = getThemeColor('#9E443F')
 

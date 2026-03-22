@@ -1,10 +1,156 @@
-const App = () => {
+import DesktopSidebar from '~/UI/Navbars/DesktopSidebar'
+import Home from '~/Home/Home'
+import OutagesTable from '~/OutagesTable/OutagesTable'
+import { Alert, Snackbar } from '@mui/material'
+import { styled } from '@mui/material/styles'
+import getClassPrefixer from '~/UI/classPrefixer'
+import { useState } from 'react'
+import type { DashboardCategory, SnackbarMessage } from '~/types/ui'
+
+const displayName = 'DashboardPage'
+const classes = getClassPrefixer(displayName) as any
+const Container = styled('div')(() => ({
+  display: 'flex',
+  flexDirection: 'row',
+  width: '100%',
+  justifyContent: 'center',
+  alignItems: 'flex-start',
+  padding: '6rem',
+  '@media (max-width: 1024px)': {
+    padding: '4rem',
+  },
+  '@media (max-width: 768px)': {
+    padding: '2rem',
+  },
+  [`& .${classes.sidebar}`]: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    position: 'sticky',
+    top: '6rem',
+    '@media (max-width: 1024px)': {
+      top: '4rem',
+    },
+    '@media (max-width: 768px)': {
+      display: 'none',
+    },
+  },
+  [`& .${classes.mobileNav}`]: {
+    display: 'none',
+    '@media (max-width: 768px)': {
+      display: 'block',
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      zIndex: 1000,
+    },
+  },
+  [`& .${classes.content}`]: {
+    width: '100%',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    marginLeft: '6rem ',
+    '@media (max-width: 1024px)': {
+      marginLeft: '4rem',
+    },
+    '@media (max-width: 768px)': {
+      marginLeft: 0,
+      marginTop: '4rem',
+    },
+  },
+  [`& .${classes.buttonContainer}`]: {
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  [`& .${classes.button}`]: {
+    padding: '1ch',
+    width: '12rem',
+    '@media (max-width: 1024px)': {
+      width: '8rem',
+    },
+    '@media (max-width: 768px)': {
+      width: '6rem',
+    },
+  },
+  [`& .${classes.containerTools}`]: {
+    display: 'flex',
+    alignItems: 'flex-end',
+    flexDirection: 'row',
+    width: '100%',
+    marginBottom: '1ch',
+    justifyContent: 'space-between',
+  },
+  [`& .${classes.tableContainer}`]: {
+    width: '100%',
+  },
+}))
+
+interface AppProps {
+  selectedCategory: DashboardCategory
+  setSelectedCategory: React.Dispatch<React.SetStateAction<DashboardCategory>>
+  snackbarMessage: SnackbarMessage | null
+  setSnackbarMessage: React.Dispatch<React.SetStateAction<SnackbarMessage | null>>
+}
+
+const App = ({
+  selectedCategory,
+  setSelectedCategory,
+  snackbarMessage,
+  setSnackbarMessage,
+}: AppProps) => {
 
   return (
-    <div>
-      hooli
-    </div>
+    <Container>
+      <div className={classes.sidebar}>
+        <DesktopSidebar
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+        />
+      </div>
+      <div className={classes.content}>
+        {selectedCategory === 'Home' && <Home/>}
+        {selectedCategory === 'US Outages' && (
+          <OutagesTable
+            setSnackbarMessage={setSnackbarMessage}
+            type='usOutage'
+          />
+        )}
+        {selectedCategory === 'Facilities Outages' && (
+          <OutagesTable
+            setSnackbarMessage={setSnackbarMessage}
+            type='facilityOutage'
+          />
+        )}
+        {/* {selectedCategory === 'Graphs' && <Graphs />} */}
+      </div>
+      <Snackbar
+        open={Boolean(snackbarMessage)}
+        autoHideDuration={5000}
+        onClose={() => setSnackbarMessage(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <Alert severity={snackbarMessage?.severity}>{snackbarMessage?.message}</Alert>
+      </Snackbar>
+    </Container>
   )
 }
 
-export default App
+const Wrapper = () => {
+  const [selectedCategory, setSelectedCategory] = useState<DashboardCategory>('Home')
+  const [snackbarMessage, setSnackbarMessage] = useState<SnackbarMessage | null>(null)
+
+  return (
+    <App
+      selectedCategory={selectedCategory}
+      setSelectedCategory={setSelectedCategory}
+      snackbarMessage={snackbarMessage}
+      setSnackbarMessage={setSnackbarMessage}
+    />
+
+  )
+}
+
+export default Wrapper
