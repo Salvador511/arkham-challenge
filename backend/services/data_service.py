@@ -27,15 +27,18 @@ class DataService:
         Load dataset from parquet and apply filters + pagination
         """
         if dataset not in settings.valid_datasets:
-            raise ValidationError("Invalid dataset. Must be 'facility' or 'us'")
+            raise ValidationError("Invalid dataset. Must be 'facility', 'us', or 'plants'")
         if offset < 0 or limit < 1:
             raise ValidationError("offset must be >= 0 and limit must be >= 1")
         if limit > settings.max_limit:
             limit = settings.max_limit
 
-        filepath = (
-            settings.facility_outages_file if dataset == "facility" else settings.us_outages_file
-        )
+        dataset_filepaths = {
+            "facility": settings.facility_outages_file,
+            "us": settings.us_outages_file,
+            "plants": settings.plants_file,
+        }
+        filepath = dataset_filepaths[dataset]
 
         try:
             df = pd.read_parquet(filepath)
@@ -45,21 +48,24 @@ class DataService:
             logger.error(f"Error reading {filepath}: {e}")
             raise ProcessingError("Failed to read dataset") from e
 
-        df["date"] = pd.to_datetime(df["date"])
+        has_date_column = "date" in df.columns
 
-        if date_from:
+        if has_date_column:
+            df["date"] = pd.to_datetime(df["date"])
+
+        if date_from and has_date_column:
             try:
                 df = df[df["date"] >= pd.to_datetime(date_from)]
             except Exception as exc:
                 raise ValidationError("Invalid date_from format. Use YYYY-MM-DD") from exc
 
-        if date_to:
+        if date_to and has_date_column:
             try:
                 df = df[df["date"] <= pd.to_datetime(date_to)]
             except Exception as exc:
                 raise ValidationError("Invalid date_to format. Use YYYY-MM-DD") from exc
 
-        if date_from and date_to:
+        if date_from and date_to and has_date_column:
             if pd.to_datetime(date_from) > pd.to_datetime(date_to):
                 raise ValidationError("date_from must be <= date_to")
 
@@ -70,7 +76,8 @@ class DataService:
 
         total_count = len(df)
 
-        df = df.sort_values("date", ascending=False)
+        if has_date_column:
+            df = df.sort_values("date", ascending=False)
 
         paginated_df = df.iloc[offset : offset + limit].copy()
 
@@ -81,7 +88,8 @@ class DataService:
             except Exception as e:
                 logger.error(f"Error joining with plants: {e}")
 
-        paginated_df["date"] = paginated_df["date"].dt.strftime("%Y-%m-%d")
+        if has_date_column:
+            paginated_df["date"] = paginated_df["date"].dt.strftime("%Y-%m-%d")
 
         data = paginated_df.to_dict("records")
 

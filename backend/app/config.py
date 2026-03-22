@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     default_limit: int = 100
     max_limit: int = 1000
 
-    valid_datasets: list = ["facility", "us"]
+    valid_datasets: list = ["facility", "us", "plants"]
 
     class Config:
         case_sensitive = False

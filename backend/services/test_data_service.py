@@ -215,3 +215,28 @@ class TestDataServiceFacilityFiltering:
 
         assert result["returned"] == 1
         assert result["data"][0]["facility_id"] == "F001"
+
+
+class TestDataServicePlantsDataset:
+    """Tests for plants dataset behavior."""
+
+    @patch("services.data_service.pd.read_parquet")
+    def test_plants_dataset_is_supported(self, mock_read, sample_plants_dataframe):
+        """Test that plants dataset can be loaded and paginated."""
+        mock_read.return_value = sample_plants_dataframe
+
+        result = DataService.get_dataset("plants", offset=0, limit=2)
+
+        assert result["total_count"] == 3
+        assert result["returned"] == 2
+        assert "facility_id" in result["data"][0]
+
+    @patch("services.data_service.pd.read_parquet")
+    def test_plants_dataset_ignores_date_filters(self, mock_read, sample_plants_dataframe):
+        """Test that date filters don't break plants dataset without date column."""
+        mock_read.return_value = sample_plants_dataframe
+
+        result = DataService.get_dataset("plants", date_from="2024-01-01", date_to="2024-01-31")
+
+        assert result["total_count"] == 3
+        assert result["returned"] == 3

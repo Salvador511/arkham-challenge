@@ -12,7 +12,7 @@ router = APIRouter()
 async def get_data(
     dataset: str | None = Query(
         None,
-        description="Dataset to fetch: 'facility' or 'us'. If not specified, returns both.",
+        description="Dataset to fetch: 'facility', 'us', or 'plants'. If not specified, returns all.",
     ),
     date_from: str | None = Query(None, description="Filter from date (YYYY-MM-DD)"),
     date_to: str | None = Query(None, description="Filter to date (YYYY-MM-DD)"),
@@ -25,7 +25,7 @@ async def get_data(
     """
     Fetch nuclear outages data with filtering and pagination.
 
-    - **dataset**: 'facility' or 'us' (optional, returns both if not specified)
+    - **dataset**: 'facility', 'us', or 'plants' (optional, returns all if not specified)
     - **date_from**: Start date in YYYY-MM-DD format
     - **date_to**: End date in YYYY-MM-DD format
     - **facility_id**: Filter by facility (only for 'facility' dataset)
@@ -52,6 +52,11 @@ async def get_data(
             offset=offset,
             limit=limit,
         )
+        plants_data = DataService.get_dataset(
+            dataset="plants",
+            offset=offset,
+            limit=limit,
+        )
 
         return {
             "status": "success",
@@ -62,6 +67,10 @@ async def get_data(
             "us_outages": {
                 "status": "success",
                 **us_data,
+            },
+            "plants": {
+                "status": "success",
+                **plants_data,
             },
         }
 
