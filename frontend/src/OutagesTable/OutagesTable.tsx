@@ -255,17 +255,15 @@ const OutagesTable = ({
             )}
           </div>
           <div className={classes.buttonsContainer}>
-            <>
-              <Button
-                variant="text"
-                className={classes.toolButton}
-                startIcon={<RefreshIcon />}
-                onClick={onRefresh}
-                disabled={isRefreshing}
-              >
-                {isRefreshing ? 'Refreshing...' : 'Refresh'}
-              </Button>
-            </>
+            <Button
+              variant="text"
+              className={classes.toolButton}
+              startIcon={<RefreshIcon />}
+              onClick={onRefresh}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </Button>
           </div>
         </div>
         <div className={classes.gridHeader}>
@@ -281,7 +279,6 @@ const OutagesTable = ({
 
       <div className={classes.tableWrapper}>
         <div className={classes.tableContent}>
-
           {usOutageData.map((row, idx) => (
             <div key={idx} className={classes.gridItems} onClick={() => {}}>
               {config.fields.map((field, index) => (
@@ -297,7 +294,6 @@ const OutagesTable = ({
           <div ref={observerTarget} className={classes.observerTarget}>
             {isFetchingNextPage && (
               <Loading />
-
             )}
           </div>
         </div>
@@ -309,13 +305,14 @@ const OutagesTable = ({
 
 type WrapperProps = {
   setSnackbarMessage: (msg: SnackbarMessage | null) => void
+  setIsGlobalRefreshing: (value: boolean) => void
   type: 'usOutage' | 'facilityOutage'
   date_from?: string
   date_to?: string
   facility_id?: string
 }
 
-const Wrapper = ({ setSnackbarMessage, type }: WrapperProps) => {
+const Wrapper = ({ setSnackbarMessage, setIsGlobalRefreshing, type }: WrapperProps) => {
   const observerTarget = useRef<HTMLDivElement>(null)
   const dataset = type === 'usOutage' ? 'us' : 'facility'
   const [dateFrom, setDateFrom] = useState('')
@@ -365,12 +362,13 @@ const Wrapper = ({ setSnackbarMessage, type }: WrapperProps) => {
   }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
   const allData = data?.pages.flatMap(page => page.data) ?? []
+  const hasContentError = isError || isFacilitiesError || allData.length === 0
 
   if (isLoading || isFacilitiesLoading) return <Loading />
-  if (isError || isFacilitiesError || allData.length === 0) return <NotAvailable />
 
   const handleRefresh = () => {
     setIsRefreshing(true)
+    setIsGlobalRefreshing(true)
     refreshData(undefined, {
       onSuccess: (response: any) => {
         const { extraction_type, status, retry_after_seconds } = response
@@ -383,9 +381,11 @@ const Wrapper = ({ setSnackbarMessage, type }: WrapperProps) => {
           if (extraction_type === 'full' && retry_after_seconds) {
             setTimeout(() => {
               setIsRefreshing(false)
+              setIsGlobalRefreshing(false)
             }, retry_after_seconds * 1000)
           } else {
             setIsRefreshing(false)
+            setIsGlobalRefreshing(false)
           }
         } else if (status === 'success') {
           setSnackbarMessage({
@@ -393,6 +393,7 @@ const Wrapper = ({ setSnackbarMessage, type }: WrapperProps) => {
             severity: 'success'
           })
           setIsRefreshing(false)
+          setIsGlobalRefreshing(false)
         }
       },
       onError: (error: any) => {
@@ -402,8 +403,18 @@ const Wrapper = ({ setSnackbarMessage, type }: WrapperProps) => {
           severity: 'error'
         })
         setIsRefreshing(false)
+        setIsGlobalRefreshing(false)
       }
     })
+  }
+
+  if (hasContentError) {
+    return (
+      <NotAvailable
+        onAction={handleRefresh}
+        isActionLoading={isRefreshing}
+        actionLabel="Refresh"
+      />)
   }
 
   return (

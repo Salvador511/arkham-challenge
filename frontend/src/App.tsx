@@ -2,7 +2,7 @@ import DesktopSidebar from '~/UI/Navbars/DesktopSidebar'
 import Home from '~/Home/Home'
 import OutagesTable from '~/OutagesTable/OutagesTable'
 import Graphs from '~/Graphs/Graphs'
-import { Alert, Snackbar } from '@mui/material'
+import { Alert, CircularProgress, Snackbar, Typography as T } from '@mui/material'
 import { styled } from '@mui/material/styles'
 import getClassPrefixer from '~/UI/classPrefixer'
 import { useState } from 'react'
@@ -87,6 +87,29 @@ const Container = styled('div')(() => ({
   [`& .${classes.tableContainer}`]: {
     width: '100%',
   },
+  [`& .${classes.refreshOverlay}`]: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 1400,
+    backgroundColor: 'rgba(0, 0, 0, 0.60)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '1rem',
+    pointerEvents: 'all',
+  },
+  [`& .${classes.refreshContent}`]: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '1rem',
+    transform: 'translateY(-12vh)',
+  },
+  [`& .${classes.refreshText}`]: {
+    textAlign: 'center',
+  },
 }))
 
 interface AppProps {
@@ -94,6 +117,8 @@ interface AppProps {
   setSelectedCategory: React.Dispatch<React.SetStateAction<DashboardCategory>>
   snackbarMessage: SnackbarMessage | null
   setSnackbarMessage: React.Dispatch<React.SetStateAction<SnackbarMessage | null>>
+  isGlobalRefreshing: boolean
+  setIsGlobalRefreshing: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 const App = ({
@@ -101,6 +126,8 @@ const App = ({
   setSelectedCategory,
   snackbarMessage,
   setSnackbarMessage,
+  isGlobalRefreshing,
+  setIsGlobalRefreshing,
 }: AppProps) => {
 
   return (
@@ -109,6 +136,7 @@ const App = ({
         <DesktopSidebar
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
+          isNavigationLocked={isGlobalRefreshing}
         />
       </div>
       <div className={classes.content}>
@@ -117,16 +145,28 @@ const App = ({
           <OutagesTable
             setSnackbarMessage={setSnackbarMessage}
             type='usOutage'
+            setIsGlobalRefreshing={setIsGlobalRefreshing}
           />
         )}
         {selectedCategory === 'Facilities Outages' && (
           <OutagesTable
             setSnackbarMessage={setSnackbarMessage}
             type='facilityOutage'
+            setIsGlobalRefreshing={setIsGlobalRefreshing}
           />
         )}
         {selectedCategory === 'Graphs' && <Graphs />}
       </div>
+      {isGlobalRefreshing && (
+        <div className={classes.refreshOverlay}>
+          <div className={classes.refreshContent}>
+            <CircularProgress size={90} />
+            <T variant='h6' color='text.main' className={classes.refreshText}>
+              Refreshing data... please wait.
+            </T>
+          </div>
+        </div>
+      )}
       <Snackbar
         open={Boolean(snackbarMessage)}
         autoHideDuration={5000}
@@ -142,6 +182,7 @@ const App = ({
 const Wrapper = () => {
   const [selectedCategory, setSelectedCategory] = useState<DashboardCategory>('Home')
   const [snackbarMessage, setSnackbarMessage] = useState<SnackbarMessage | null>(null)
+  const [isGlobalRefreshing, setIsGlobalRefreshing] = useState(false)
 
   return (
     <App
@@ -149,6 +190,8 @@ const Wrapper = () => {
       setSelectedCategory={setSelectedCategory}
       snackbarMessage={snackbarMessage}
       setSnackbarMessage={setSnackbarMessage}
+      isGlobalRefreshing={isGlobalRefreshing}
+      setIsGlobalRefreshing={setIsGlobalRefreshing}
     />
 
   )

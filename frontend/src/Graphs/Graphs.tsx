@@ -22,7 +22,6 @@ const MAX_FACILITY_SERIES = 5
 const DEFAULT_LIMIT = 250
 const MAX_API_LIMIT = 1000
 const MAX_DATE_RANGE_DAYS = 60
-
 const GraphsContainer = styled('div')(({ theme }: any) => ({
   width: '100%',
   height: '100%',
@@ -97,9 +96,8 @@ const GraphsContainer = styled('div')(({ theme }: any) => ({
       color: theme.palette.text.main,
     },
     '& .MuiAutocomplete-tag': {
-      backgroundColor: theme.palette.primary.enabled,
+      backgroundColor: theme.palette.primary.main,
       color: theme.palette.text.main,
-      border: `1px solid ${theme.palette.primary.active}`,
     },
     '& .MuiAutocomplete-tag .MuiChip-deleteIcon': {
       color: theme.palette.text.muted,
@@ -116,11 +114,10 @@ const GraphsContainer = styled('div')(({ theme }: any) => ({
   },
   [`& .${classes.chartWrapper}`]: {
     width: '100%',
-    minHeight: '480px',
     padding: '1rem',
-    border: `1px solid ${theme.palette.text.disable}`,
+    border: `1px solid ${theme.palette.text.main}`,
     borderRadius: '8px',
-    backgroundColor: theme.palette.background.enabled,
+    backgroundColor: theme.palette.text.enabled,
   },
   [`& .${classes.helperText}`]: {
     color: theme.palette.text.muted,
@@ -296,38 +293,51 @@ const Graphs = ({
             label="Include US national outage line"
             className={classes.usToggleLabel}
           />
+          <T variant="body2" className={classes.helperText}>
+            Maximum date range: {MAX_DATE_RANGE_DAYS} days. Rows per series are auto-calculated from range: {effectiveLimit}.
+          </T>
         </div>
-        <T variant="body2" className={classes.helperText}>
-          Maximum date range: {MAX_DATE_RANGE_DAYS} days. Rows per series are auto-calculated from range: {effectiveLimit}.
-        </T>
       </div>
 
 
       <div className={classes.chartWrapper}>
         {hasSeriesToRender ? (
           <LineChart
-            height={440}
+            height={400}
             xAxis={[
               {
                 scaleType: 'point',
                 data: xAxisData,
-                tickLabelStyle: { fill: theme.palette.text.main, fontSize: 10 },
+                tickLabelStyle: { fill: theme.palette.common.white, fontSize: 10 },
               },
             ]}
             yAxis={[
               {
                 label: 'Outage (MW)',
-                tickLabelStyle: { fill: theme.palette.text.main },
+                tickLabelStyle: { fill: theme.palette.common.white },
+                labelStyle: { fill: theme.palette.common.white },
               },
             ]}
             series={chartSeries}
-            margin={{ top: 20, right: 20, left: 60, bottom: 70 }}
             grid={{ horizontal: true, vertical: false }}
             sx={{
-              '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: 'text.muted' },
-              '& .MuiChartsGrid-line': { stroke: 'text.disable' },
+              '& .MuiChartsAxis-line, & .MuiChartsAxis-tick': { stroke: `${theme.palette.common.white} !important` },
+              '& .MuiChartsGrid-line': { stroke: `${theme.palette.text.disable} !important` },
               '& .MuiMarkElement-root': { strokeWidth: 1.5 },
-              '& .MuiChartsLegend-label': { fill: theme.palette.text.main },
+              '& .MuiChartsLegend-label': {
+                fill: `${theme.palette.common.white} !important`,
+                color: `${theme.palette.common.white} !important`,
+              },
+              '& .MuiChartsLegend-root text, & .MuiChartsLegend-root tspan': {
+                fill: `${theme.palette.common.white} !important`,
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none',
+                pointerEvents: 'none',
+              },
+              '& .MuiChartsAxis-label': { fill: `${theme.palette.common.white} !important` },
+              '& .MuiChartsAxis-tickLabel': { fill: `${theme.palette.common.white} !important` },
             }}
           />
         ) : (

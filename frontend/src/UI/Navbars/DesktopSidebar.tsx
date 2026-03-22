@@ -29,10 +29,12 @@ const SidebarContainer = styled('div')(() => ({
 interface DesktopSidebarProps {
   selectedCategory: DashboardCategory
   setSelectedCategory: (newValue: DashboardCategory) => void
+  isNavigationLocked?: boolean
 }
 
-const DesktopSidebar = ({ selectedCategory, setSelectedCategory }: DesktopSidebarProps) => {
+const DesktopSidebar = ({ selectedCategory, setSelectedCategory, isNavigationLocked = false }: DesktopSidebarProps) => {
   const handleOptionClick = (title: DashboardCategory) => {
+    if (isNavigationLocked) return
     setSelectedCategory(title)
   }
 
@@ -49,6 +51,7 @@ const DesktopSidebar = ({ selectedCategory, setSelectedCategory }: DesktopSideba
               variant={selectedCategory === title ? 'contained' : 'outlined'}
               startIcon={Icon ? <Icon /> : null}
               onClick={() => handleOptionClick(title)}
+              disabled={isNavigationLocked}
               className={classes.button}
               sx={selectedCategory === title ? { color: 'white' } : {}}
             >
