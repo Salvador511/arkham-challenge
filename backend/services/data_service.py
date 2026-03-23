@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 
 from app.config import settings
-from exceptions import DataNotFoundError, ProcessingError, ValidationError
+from app.core.exceptions import DataNotFoundError, ProcessingError, ValidationError
 
 logger = logging.getLogger(__name__)
 
