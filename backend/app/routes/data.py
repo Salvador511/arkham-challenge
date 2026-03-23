@@ -82,6 +82,7 @@ async def get_data(
         offset=offset,
         limit=limit,
     )
+
     return {
         "status": "success",
         **data,

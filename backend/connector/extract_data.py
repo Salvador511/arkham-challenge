@@ -22,6 +22,7 @@ from deltalake import DeltaTable
 from dotenv import load_dotenv
 
 from app.config import settings
+from app.core.exceptions import APIError, InvalidAPIKeyError, NetworkError
 from connector.config import (
     API_TIMEOUT,
     COLUMN_MAPPING,
@@ -48,7 +49,6 @@ from connector.state_manager import (
     save_state,
     vacuum_delta,
 )
-from exceptions import APIError, InvalidAPIKeyError, NetworkError
 
 # Setup logging
 logging.basicConfig(
