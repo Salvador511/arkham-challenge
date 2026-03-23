@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 from deltalake import DeltaTable, write_deltalake
 
+from app.config import settings
 from connector.config import (
     DELTA_DIR,
     FACILITY_OUTAGES_DELTA,
@@ -37,9 +38,33 @@ def load_state() -> dict:
     """
     Load extraction state (last extraction date).
 
+    If DATABASE_URL is configured, loads from PostgreSQL.
+    Otherwise, loads from filesystem (backward compatible).
+
     Returns:
         Dictionary with last extraction dates for each dataset
     """
+    if settings.database_url:
+        try:
+            from app.core.drivers.state_driver import PostgresStateDriver
+
+            driver = PostgresStateDriver(settings.database_url)
+            state = driver.load_state()
+            logger.info("✅ Loaded extraction state from database")
+            return state
+
+        except Exception as exc:
+            logger.error("❌ Failed to load state from database: %s", exc)
+            # Fallback to filesystem
+            logger.warning("⚠️  Falling back to filesystem state")
+            return _load_state_from_file()
+    else:
+        # Filesystem (development)
+        return _load_state_from_file()
+
+
+def _load_state_from_file() -> dict:
+    """Load extraction state from filesystem (fallback/development)."""
     if not Path(STATE_FILE).exists():
         logger.warning("State file not found, returning empty state")
         return {
@@ -52,7 +77,7 @@ def load_state() -> dict:
         with open(STATE_FILE) as f:
             return json.load(f)
     except Exception as exc:
-        logger.error("Failed to load state: %s", exc)
+        logger.error("Failed to load state from file: %s", exc)
         raise
 
 
@@ -60,12 +85,35 @@ def save_state(state: dict) -> None:
     """
     Save extraction state (last extraction date).
 
+    If DATABASE_URL is configured, saves to PostgreSQL.
+    Otherwise, saves to filesystem (backward compatible).
+
     Args:
         state: Dictionary with extraction metadata
 
     Raises:
         Exception: If save fails
     """
+    if settings.database_url:
+        try:
+            from app.core.drivers.state_driver import PostgresStateDriver
+
+            driver = PostgresStateDriver(settings.database_url)
+            driver.save_state(state)
+            logger.info("✅ Saved extraction state to database")
+
+        except Exception as exc:
+            logger.error("❌ Failed to save state to database: %s", exc)
+            # Fallback to filesystem
+            logger.warning("⚠️  Falling back to filesystem state")
+            _save_state_to_file(state)
+    else:
+        # Filesystem (development)
+        _save_state_to_file(state)
+
+
+def _save_state_to_file(state: dict) -> None:
+    """Save extraction state to filesystem (fallback/development)."""
     try:
         os.makedirs(DELTA_DIR, exist_ok=True)
 
@@ -73,7 +121,7 @@ def save_state(state: dict) -> None:
             json.dump(state, f, indent=2)
         logger.info("State saved to %s", STATE_FILE)
     except Exception as exc:
-        logger.error("Failed to save state: %s", exc)
+        logger.error("Failed to save state to file: %s", exc)
         raise
 
 

@@ -21,6 +21,7 @@ import requests
 from deltalake import DeltaTable
 from dotenv import load_dotenv
 
+from app.config import settings
 from connector.config import (
     API_TIMEOUT,
     COLUMN_MAPPING,
@@ -159,6 +160,8 @@ def fetch_all_data(
     all_records = []
     offset = 0
     total = None
+    page_num = 0
+    total_pages = None
 
     while True:
         payload = fetch_page(
@@ -178,17 +181,40 @@ def fetch_all_data(
         records = response_data.get("data", [])
         total = int(response_data.get("total", 0))
 
+        # Calculate total pages on first iteration
+        if total_pages is None and total > 0:
+            total_pages = (total + PAGE_SIZE - 1) // PAGE_SIZE  # Ceiling division
+
+        page_num += 1
+
         if not records:
             break
 
         all_records.extend(records)
+
+        # Log progress
+        if total_pages:
+            logger.info(
+                "📥 Fetching %s: Page %d/%d (~%d rows so far)",
+                dataset_name,
+                page_num,
+                total_pages,
+                len(all_records),
+            )
+        else:
+            logger.info(
+                "📥 Fetching %s: Page %d (~%d rows so far)",
+                dataset_name,
+                page_num,
+                len(all_records),
+            )
 
         if offset + PAGE_SIZE >= total:
             break
 
         offset += PAGE_SIZE
 
-    logger.info("Total fetched for %s: %s rows", dataset_name, len(all_records))
+    logger.info("✅ Total fetched for %s: %d rows", dataset_name, len(all_records))
     return all_records
 
 
@@ -207,11 +233,13 @@ def fetch_last_data(
     Returns:
         List of records since start_date
     """
-    logger.info("Fetching incremental %s since %s...", dataset_name, start_date)
+    logger.info("🔄 Fetching incremental %s since %s...", dataset_name, start_date)
 
     filtered_records = fetch_all_data(url, api_key, dataset_name, start_date=start_date)
 
-    logger.info("API returned %s new/modified records", len(filtered_records))
+    logger.info(
+        "✅ API returned %s new/modified records for %s", len(filtered_records), dataset_name
+    )
     return filtered_records
 
 
@@ -247,13 +275,15 @@ def transform_data(records: list[dict], dataset_type: str, required_fields: list
     Returns:
         Transformed DataFrame
     """
+    logger.info("🔍 Validating %d records...", len(records))
     valid_records = [r for r in records if validate_record(r, required_fields)]
-    logger.info("Valid records: %s / %s", len(valid_records), len(records))
+    logger.info("✅ Valid records: %d / %d", len(valid_records), len(records))
 
     if not valid_records:
         logger.warning("No valid records found!")
         return pd.DataFrame()
 
+    logger.info("🔄 Transforming data...")
     df = pd.DataFrame(valid_records)
 
     df = df.rename(columns=COLUMN_MAPPING)
@@ -268,6 +298,7 @@ def transform_data(records: list[dict], dataset_type: str, required_fields: list
     else:  # us_outages
         df = df[["date", "capacity", "outage", "percent_outage"]]
 
+    logger.info("✅ Transformation complete: %d rows ready", len(df))
     return df
 
 
@@ -281,16 +312,20 @@ def extract_plants(facility_df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         Plants DataFrame with facility_id, facility_name
     """
+    logger.info("⚛️ Extracting unique nuclear plants...")
     df = facility_df[["facility_id", "facility_name"]].drop_duplicates()
     df = df.sort_values("facility_id").reset_index(drop=True)
 
-    logger.info("Extracted %s unique plants", len(df))
+    logger.info("✅ Extracted %d unique plants", len(df))
     return df
 
 
 def save_final_output(facility_delta_path: str, us_delta_path: str, plants_delta_path: str) -> None:
     """
     Save final output Parquets from complete Delta tables for backend consumption.
+
+    If DATABASE_URL is configured, saves to PostgreSQL BYTEA.
+    Otherwise, saves to filesystem (backward compatible).
 
     Args:
         facility_delta_path: Path to facility_outages Delta table
@@ -302,23 +337,50 @@ def save_final_output(facility_delta_path: str, us_delta_path: str, plants_delta
         us_df = DeltaTable(us_delta_path).to_pandas()
         plants_df = DeltaTable(plants_delta_path).to_pandas()
 
-        if len(facility_df) > 0:
-            facility_df.to_parquet(FACILITY_OUTAGES_FILE, index=False)
-            logger.info("Saved final output: %s (%s rows)", FACILITY_OUTAGES_FILE, len(facility_df))
-        else:
-            logger.warning("Skipping empty facility_outages DataFrame")
+        # Use PostgreSQL if DATABASE_URL is configured
+        if settings.database_url:
+            logger.info("💾 Using PostgreSQL backend for parquet storage")
+            from app.core.drivers.storage_driver import DatabaseParquetDriver
 
-        if len(us_df) > 0:
-            us_df.to_parquet(US_OUTAGES_FILE, index=False)
-            logger.info("Saved final output: %s (%s rows)", US_OUTAGES_FILE, len(us_df))
-        else:
-            logger.warning("Skipping empty us_outages DataFrame")
+            driver = DatabaseParquetDriver(settings.database_url)
+            if len(facility_df) > 0:
+                driver.save("facility_outages", facility_df)
+            else:
+                logger.warning("Skipping empty facility_outages DataFrame")
 
-        if len(plants_df) > 0:
-            plants_df.to_parquet(PLANTS_FILE, index=False)
-            logger.info("Saved final output: %s (%s rows)", PLANTS_FILE, len(plants_df))
+            if len(us_df) > 0:
+                driver.save("us_outages", us_df)
+            else:
+                logger.warning("Skipping empty us_outages DataFrame")
+
+            if len(plants_df) > 0:
+                driver.save("plants", plants_df)
+            else:
+                logger.warning("Skipping empty plants DataFrame")
+
+        # Fallback: save to filesystem (for local development)
         else:
-            logger.warning("Skipping empty plants DataFrame")
+            logger.info("💾 Using filesystem backend for parquet storage (DATABASE_URL not set)")
+
+            if len(facility_df) > 0:
+                facility_df.to_parquet(FACILITY_OUTAGES_FILE, index=False)
+                logger.info(
+                    "Saved final output: %s (%s rows)", FACILITY_OUTAGES_FILE, len(facility_df)
+                )
+            else:
+                logger.warning("Skipping empty facility_outages DataFrame")
+
+            if len(us_df) > 0:
+                us_df.to_parquet(US_OUTAGES_FILE, index=False)
+                logger.info("Saved final output: %s (%s rows)", US_OUTAGES_FILE, len(us_df))
+            else:
+                logger.warning("Skipping empty us_outages DataFrame")
+
+            if len(plants_df) > 0:
+                plants_df.to_parquet(PLANTS_FILE, index=False)
+                logger.info("Saved final output: %s (%s rows)", PLANTS_FILE, len(plants_df))
+            else:
+                logger.warning("Skipping empty plants DataFrame")
 
     except Exception as exc:
         logger.error("Failed to save final output: %s", exc)
@@ -465,6 +527,64 @@ def print_summary(
     print()
 
 
+def run_recovery_mode(api_key: str) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Recovery mode: Delta tables deleted but database has data.
+
+    This handles the scenario where:
+    - Local Delta tables don't exist (e.g., ephemeral filesystem in Render restarted)
+    - But PostgreSQL database still has the parquet data
+
+    Solution:
+    1. Load dataframes from database
+    2. Recreate Delta tables locally from database data
+    3. Continue with incremental extraction
+
+    Args:
+        api_key: EIA API key
+
+    Returns:
+        Tuple of (facility_df, us_df, plants_df)
+    """
+    logger.info("🔄 RECOVERY MODE: Delta tables deleted but database has data")
+    logger.info("Recreating Delta tables from database...")
+    logger.info("-" * 70)
+
+    if not settings.database_url:
+        raise InvalidAPIKeyError("Recovery mode requires DATABASE_URL to be set")
+
+    try:
+        from app.core.drivers.storage_driver import DatabaseParquetDriver
+
+        driver = DatabaseParquetDriver(settings.database_url)
+
+        # Load data from database
+        facility_df = driver.load("facility_outages")
+        us_df = driver.load("us_outages")
+        plants_df = driver.load("plants")
+
+        logger.info("✅ Loaded data from database:")
+        logger.info("   - facility_outages: %d rows", len(facility_df))
+        logger.info("   - us_outages: %d rows", len(us_df))
+        logger.info("   - plants: %d rows", len(plants_df))
+
+        # Recreate Delta tables locally from database data
+        logger.info("Creating Delta tables from database data...")
+        save_delta(plants_df, PLANTS_DELTA, mode="overwrite")
+        save_delta(facility_df, FACILITY_OUTAGES_DELTA, mode="overwrite")
+        save_delta(us_df, US_OUTAGES_DELTA, mode="overwrite")
+
+        logger.info("✅ Delta tables recreated successfully")
+        logger.info("⚠️  Next extraction will be INCREMENTAL")
+        logger.info("-" * 70)
+
+        return facility_df, us_df, plants_df
+
+    except Exception as exc:
+        logger.error("Recovery mode failed: %s", exc)
+        raise
+
+
 def main() -> None:
     """Main entry point."""
     load_dotenv()
@@ -478,13 +598,53 @@ def main() -> None:
     logger.info("=" * 70)
 
     try:
-        is_first_run = not delta_tables_exist()
+        delta_exists = delta_tables_exist()
+        db_has_data = False
 
-        if is_first_run:
-            facility_df, us_df, plants_df = run_full_extraction(api_key)
-        else:
+        # Check if database has data (for recovery mode detection)
+        if settings.database_url:
+            try:
+                from app.core.drivers.storage_driver import DatabaseParquetDriver
+
+                driver = DatabaseParquetDriver(settings.database_url)
+                db_has_data = driver.has_any_data()
+            except Exception as exc:
+                logger.warning("Could not check database for recovery mode: %s", exc)
+
+        is_first_run = False
+
+        # Determine extraction mode
+        if delta_exists:
+            # Delta tables exist - validate state before deciding on extraction type
+            logger.info("Delta tables found - checking extraction state...")
             state = load_state()
-            facility_df, us_df, plants_df = run_incremental_extraction(api_key, state)
+
+            # Check if state is valid (has extraction dates)
+            state_is_valid = state and state.get("facility_outages", {}).get("last_extraction_date")
+
+            if not state_is_valid:
+                # Delta exists but state is missing/invalid → do FULL extraction
+                logger.info(
+                    "⚠️  Delta tables exist but extraction state is invalid "
+                    "→ performing FULL extraction"
+                )
+                is_first_run = True
+                facility_df, us_df, plants_df = run_full_extraction(api_key)
+            else:
+                # Delta exists and state is valid → do incremental
+                logger.info("Proceeding with incremental extraction")
+                facility_df, us_df, plants_df = run_incremental_extraction(api_key, state)
+
+        elif db_has_data:
+            # Recovery mode: Delta deleted but DB has data
+            logger.info("Delta tables not found but database has data - entering RECOVERY MODE")
+            facility_df, us_df, plants_df = run_recovery_mode(api_key)
+
+        else:
+            # First run: No Delta and no database data → full extraction
+            logger.info("No Delta tables and no database data - performing FULL extraction")
+            is_first_run = True
+            facility_df, us_df, plants_df = run_full_extraction(api_key)
 
         print_summary(is_first_run, facility_df, us_df, plants_df)
 

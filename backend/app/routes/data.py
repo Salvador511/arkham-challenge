@@ -2,13 +2,13 @@
 
 from fastapi import APIRouter, Query
 
-from exceptions import ValidationError
+from app.core.exceptions import ValidationError
 from services.data_service import DataService
 
-router = APIRouter()
+router = APIRouter(tags=["Data"])
 
 
-@router.get("/data")
+@router.get("/data", summary="Get outages and plants data")
 async def get_data(
     dataset: str | None = Query(
         None,

@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from exceptions import (
+from app.core.exceptions import (
     APIError,
     ExtractionError,
     ExtractionLocked,
@@ -17,6 +17,7 @@ from services.refresh_service import (
     LOCK_FILE,
     LOCK_TIMEOUT,
     acquire_lock,
+    get_extraction_status,
     is_extraction_in_progress,
     release_lock,
     run_extraction,
@@ -107,6 +108,27 @@ class TestExtractionInProgress:
         assert is_extraction_in_progress() is True
 
 
+class TestExtractionStatus:
+    """Tests for extraction polling status responses."""
+
+    def test_get_extraction_status_processing_when_locked(self, cleanup_lock):
+        """Status endpoint should report processing when lock exists."""
+        acquire_lock()
+
+        response, status_code = get_extraction_status()
+
+        assert status_code == 200
+        assert response["status"] == "processing"
+        assert "retry_after_seconds" in response
+
+    def test_get_extraction_status_idle_when_unlocked(self, cleanup_lock):
+        """Status endpoint should report idle when no extraction is running."""
+        response, status_code = get_extraction_status()
+
+        assert status_code == 200
+        assert response["status"] == "idle"
+
+
 class TestRunExtraction:
     """Tests for extraction execution."""
 
@@ -184,26 +206,28 @@ class TestTriggerExtractionAsync:
 
     @patch("services.refresh_service.delta_tables_exist")
     @patch("services.refresh_service.connector_main")
-    def test_incremental_extraction_returns_200_on_success(
+    def test_incremental_extraction_returns_202_and_runs_in_background(
         self, mock_connector, mock_delta_exists, cleanup_lock
     ):
-        """Test that successful incremental extraction returns 200."""
+        """Test that incremental extraction is accepted and queued in background."""
         mock_delta_exists.return_value = True
 
         background_tasks = MagicMock()
 
         response, status_code = trigger_extraction_async(background_tasks)
 
-        assert status_code == 200
-        assert response["status"] == "success"
+        assert status_code == 202
+        assert response["status"] == "processing"
         assert response["extraction_type"] == "incremental"
+        background_tasks.add_task.assert_called_once()
+        mock_connector.assert_not_called()
 
     @patch("services.refresh_service.delta_tables_exist")
     @patch("services.refresh_service.connector_main")
-    def test_incremental_extraction_returns_500_on_error(
+    def test_incremental_extraction_does_not_execute_connector_in_request_thread(
         self, mock_connector, mock_delta_exists, cleanup_lock
     ):
-        """Test that failed incremental extraction returns 500."""
+        """Test that incremental extraction is queued even if connector would fail."""
         mock_delta_exists.return_value = True
         mock_connector.side_effect = InvalidAPIKeyError()
 
@@ -211,9 +235,11 @@ class TestTriggerExtractionAsync:
 
         response, status_code = trigger_extraction_async(background_tasks)
 
-        assert status_code == 500
-        assert response["status"] == "error"
-        assert response["error"] == "ExtractionError"
+        assert status_code == 202
+        assert response["status"] == "processing"
+        assert response["extraction_type"] == "incremental"
+        background_tasks.add_task.assert_called_once()
+        mock_connector.assert_not_called()
 
     @patch("services.refresh_service.delta_tables_exist")
     def test_extraction_already_in_progress_returns_202(self, mock_delta_exists, cleanup_lock):
@@ -228,18 +254,14 @@ class TestTriggerExtractionAsync:
         assert "Extraction already in progress" in response["message"]
 
     @patch("services.refresh_service.delta_tables_exist")
-    @patch("services.refresh_service.connector_main")
-    def test_incremental_extraction_unexpected_error(
-        self, mock_connector, mock_delta_exists, cleanup_lock
-    ):
-        """Test that unexpected errors in incremental extraction return 500."""
+    def test_incremental_extraction_locked_returns_202(self, mock_delta_exists, cleanup_lock):
+        """Test that incremental extraction returns processing when lock is held."""
         mock_delta_exists.return_value = True
-        mock_connector.side_effect = RuntimeError("Unexpected error")
+        acquire_lock()
 
         background_tasks = MagicMock()
 
         response, status_code = trigger_extraction_async(background_tasks)
 
-        assert status_code == 500
-        assert response["status"] == "error"
-        assert response["error"] == "UnexpectedError"
+        assert status_code == 202
+        assert response["status"] == "processing"

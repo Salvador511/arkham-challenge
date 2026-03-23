@@ -4,26 +4,25 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Response
 
-from exceptions import ExtractionError, ExtractionLocked, ExtractionMessages
-from services.refresh_service import trigger_extraction_async
+from app.core.exceptions import ExtractionError, ExtractionLocked, ExtractionMessages
+from services.refresh_service import get_extraction_status, trigger_extraction_async
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(tags=["Refresh"])
 
 
-@router.post("/refresh")
+@router.post("/refresh", summary="Trigger full or incremental extraction")
 async def refresh_data(background_tasks: BackgroundTasks, response: Response):
     """
     Trigger data extraction and refresh.
 
     This endpoint handles:
     - First-time full extraction (takes several minutes, returns 202)
-    - Incremental extraction for subsequent runs (faster, returns 200 with completion)
+    - Incremental extraction for subsequent runs (runs in background, returns 202)
     - Prevents concurrent extractions
 
     Returns:
-    - 202 Accepted: For async FULL extraction (first run)
-    - 200 OK: For completed INCREMENTAL extraction (subsequent runs)
+    - 202 Accepted: For accepted FULL or INCREMENTAL extraction
     - 500 Internal Server Error: If extraction fails
 
     Response structure:
@@ -64,3 +63,11 @@ async def refresh_data(background_tasks: BackgroundTasks, response: Response):
             "error": "InternalServerError",
             "message": ExtractionMessages.UNEXPECTED_ERROR,
         }
+
+
+@router.get("/refresh/status", summary="Get extraction status")
+async def refresh_status(response: Response):
+    """Get current extraction status for polling clients."""
+    result, status_code = get_extraction_status()
+    response.status_code = status_code
+    return result

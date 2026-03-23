@@ -1,15 +1,23 @@
-import logging
-from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+# Load environment variables BEFORE importing settings
+load_dotenv()
 
-from app.config import settings
-from app.error_handlers import register_error_handlers
-from app.routes import data, refresh
-from services.refresh_service import run_extraction
+import logging  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
+from app.config import settings  # noqa: E402
+from app.core.logging import configure_logging  # noqa: E402
+from app.error_handlers import register_error_handlers  # noqa: E402
+from app.routes import data, refresh  # noqa: E402
+from services.refresh_service import run_extraction  # noqa: E402
 
 logger = logging.getLogger(__name__)
+
+configure_logging()
 
 
 async def startup_extraction():
@@ -52,13 +60,16 @@ app = FastAPI(
     title=settings.app_title,
     version=settings.app_version,
     debug=settings.debug,
+    docs_url=settings.docs_url,
+    redoc_url=settings.redoc_url,
+    openapi_url=settings.openapi_url,
     lifespan=lifespan,
 )
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

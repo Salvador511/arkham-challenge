@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pandas as pd
 import pytest
 
-from exceptions import DataNotFoundError, ProcessingError, ValidationError
+from app.core.exceptions import DataNotFoundError, ProcessingError, ValidationError
 from services.data_service import DataService
 
 

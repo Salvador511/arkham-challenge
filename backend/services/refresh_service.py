@@ -8,12 +8,11 @@ Manages the extraction workflow including:
 """
 
 import logging
+import os
 import time
 from pathlib import Path
 
-from connector.extract_data import main as connector_main
-from connector.state_manager import delta_tables_exist
-from exceptions import (
+from app.core.exceptions import (
     APIError,
     ExtractionError,
     ExtractionLocked,
@@ -21,6 +20,8 @@ from exceptions import (
     InvalidAPIKeyError,
     NetworkError,
 )
+from connector.extract_data import main as connector_main
+from connector.state_manager import delta_tables_exist
 
 logger = logging.getLogger(__name__)
 
@@ -31,24 +32,28 @@ LOCK_TIMEOUT = 600  # 10 minutes - max expected extraction time
 
 def acquire_lock() -> bool:
     """
-    Attempt to acquire extraction lock.
+    Attempt to acquire extraction lock using atomic file creation.
+
+    Uses os.open with O_CREAT | O_EXCL for atomic operation (no race condition).
 
     Returns:
         True if lock acquired, False if already locked
     """
-    if LOCK_FILE.exists():
-        # Check if lock is stale (timeout)
+    try:
+        # Atomic file creation: fails if already exists
+        fd = os.open(str(LOCK_FILE), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.close(fd)
+        logger.info("Extraction lock acquired")
+        return True
+    except FileExistsError:
+        # Lock file already exists - check if stale
         lock_age = time.time() - LOCK_FILE.stat().st_mtime
         if lock_age > LOCK_TIMEOUT:
             logger.warning(f"Stale lock detected (age: {lock_age:.0f}s), removing...")
             LOCK_FILE.unlink()
-        else:
-            return False
-
-    # Create lock file
-    LOCK_FILE.touch()
-    logger.info("Extraction lock acquired")
-    return True
+            # Retry recursively
+            return acquire_lock()
+        return False
 
 
 def release_lock() -> None:
@@ -107,13 +112,29 @@ def run_extraction() -> dict:
         release_lock()
 
 
+def _run_extraction_background() -> None:
+    """
+    Run extraction in background (assumes lock is already acquired).
+
+    Used for both FULL and INCREMENTAL extraction background tasks.
+    Lock is already acquired by trigger_extraction_async.
+    """
+    try:
+        connector_main()
+        logger.info("✅ Background extraction completed")
+    except Exception as exc:
+        logger.error(f"Background extraction failed: {exc}")
+    finally:
+        release_lock()
+
+
 def trigger_extraction_async(background_tasks) -> tuple[dict, int]:
     """
-    Trigger extraction - async for FULL, sync for INCREMENTAL.
+    Trigger extraction in background for both FULL and INCREMENTAL.
 
     Determines extraction type and executes accordingly:
-    - FULL: background async (returns 202)
-    - INCREMENTAL: synchronous (returns 200 with summary)
+    - FULL: background async (returns 202) - acquires lock BEFORE queuing task
+    - INCREMENTAL: background async (returns 202) - acquires lock BEFORE queuing task
 
     Args:
         background_tasks: FastAPI BackgroundTasks instance
@@ -121,20 +142,20 @@ def trigger_extraction_async(background_tasks) -> tuple[dict, int]:
     Returns:
         Tuple of (response_dict, http_status_code)
     """
-    # Check if already extracting
-    if is_extraction_in_progress():
+    # Determine extraction type first
+    is_full = not delta_tables_exist()
+
+    # Acquire lock BEFORE adding task to queue
+    if not acquire_lock():
         return {
             "status": "processing",
             "message": ExtractionMessages.EXTRACTION_IN_PROGRESS,
             "retry_after_seconds": ExtractionMessages.EXTRACTION_IN_PROGRESS_RETRY_SECONDS,
         }, 202
 
-    # Determine extraction type
-    is_full = not delta_tables_exist()
-
     if is_full:
         # FULL extraction: async in background
-        background_tasks.add_task(run_extraction)
+        background_tasks.add_task(_run_extraction_background)
         return {
             "status": "processing",
             "extraction_type": "full",
@@ -142,23 +163,31 @@ def trigger_extraction_async(background_tasks) -> tuple[dict, int]:
             "retry_after_seconds": ExtractionMessages.FULL_EXTRACTION_RETRY_SECONDS,
         }, 202
     else:
-        # INCREMENTAL extraction: synchronous (wait for completion)
-        try:
-            run_extraction()
-            return {
-                "status": "success",
-                "extraction_type": "incremental",
-                "message": ExtractionMessages.INCREMENTAL_EXTRACTION_SUCCESS,
-            }, 200
-        except ExtractionError as exc:
-            return {
-                "status": "error",
-                "error": "ExtractionError",
-                "message": str(exc),
-            }, 500
-        except Exception:
-            return {
-                "status": "error",
-                "error": "UnexpectedError",
-                "message": ExtractionMessages.UNEXPECTED_ERROR,
-            }, 500
+        # INCREMENTAL extraction: async in background
+        background_tasks.add_task(_run_extraction_background)
+        return {
+            "status": "processing",
+            "extraction_type": "incremental",
+            "message": ExtractionMessages.INCREMENTAL_EXTRACTION_STARTED,
+            "retry_after_seconds": ExtractionMessages.INCREMENTAL_EXTRACTION_RETRY_SECONDS,
+        }, 202
+
+
+def get_extraction_status() -> tuple[dict, int]:
+    """
+    Get current extraction status for polling.
+
+    Returns:
+        Tuple of (response_dict, http_status_code)
+    """
+    if is_extraction_in_progress():
+        return {
+            "status": "processing",
+            "message": ExtractionMessages.EXTRACTION_IN_PROGRESS,
+            "retry_after_seconds": ExtractionMessages.EXTRACTION_IN_PROGRESS_RETRY_SECONDS,
+        }, 200
+
+    return {
+        "status": "idle",
+        "message": "No extraction in progress",
+    }, 200
