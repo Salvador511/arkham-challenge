@@ -6,6 +6,7 @@ import { Alert, CircularProgress, Snackbar, Typography as T } from '@mui/materia
 import { styled } from '@mui/material/styles'
 import getClassPrefixer from '~/UI/classPrefixer'
 import { useState } from 'react'
+import MobileNavbar from '~/UI/Navbars/MobileNavbar'
 import type { DashboardCategory, SnackbarMessage } from '~/types/ui'
 
 const displayName = 'DashboardPage'
@@ -134,6 +135,13 @@ const App = ({
     <Container>
       <div className={classes.sidebar}>
         <DesktopSidebar
+          selectedCategory={selectedCategory}
+          setSelectedCategory={setSelectedCategory}
+          isNavigationLocked={isGlobalRefreshing}
+        />
+      </div>
+      <div className={classes.mobileNav}>
+        <MobileNavbar
           selectedCategory={selectedCategory}
           setSelectedCategory={setSelectedCategory}
           isNavigationLocked={isGlobalRefreshing}

@@ -42,6 +42,9 @@ const Container = styled('div')<{ gridColumns?: string }>(({ theme, gridColumns 
     zIndex: 10,
     backgroundColor: theme.palette.background.main,
     paddingTop: '2rem',
+    '@media (max-width: 768px)': {
+      top: '3.5rem',
+    },
   },
   [`& .${classes.gridHeader}`]: {
     marginBottom: '0.5rem',
