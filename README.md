@@ -2,6 +2,30 @@
 
 Data pipeline and dashboard that extracts Nuclear Outages data from the EIA Open Data API, stores it in Parquet/Delta, exposes it through a REST API, and visualizes it in a web interface.
 
+## Production URLs
+
+- Frontend: https://nuclear-outage.onrender.com/
+- Backend API docs: https://nuclear-outages-api.onrender.com/docs
+
+## Project Purpose and Architecture
+
+This repository is a monorepo with two deployable applications:
+
+- **Frontend (`frontend/`)**
+  - React + Vite dashboard for data exploration.
+  - Calls backend endpoints using `VITE_API_BASE_URL`.
+  - Shows outages in charts and tables with filtering and refresh actions.
+
+- **Backend (`backend/`)**
+  - FastAPI service that extracts data from EIA Open Data API.
+  - Exposes REST endpoints: `/data`, `/refresh`, `/refresh/status`, `/health`.
+  - Handles full and incremental extraction workflows.
+
+- **Database and Storage (`backend/storage/` + `DATABASE_URL`)**
+  - Data is processed and stored as Delta/Parquet datasets.
+  - With `DATABASE_URL`, backend persists cache/state in PostgreSQL (recommended for cloud).
+  - Without `DATABASE_URL`, filesystem mode is used (useful locally, not ideal for ephemeral cloud disks).
+
 ## Quick Start
 
 ### 1) Prerequisites
