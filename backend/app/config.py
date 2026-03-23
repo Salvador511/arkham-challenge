@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Configuración de la API"""
+    """API configuration settings."""
 
     model_config = SettingsConfigDict(
         case_sensitive=False,
@@ -23,19 +23,18 @@ class Settings(BaseSettings):
     # Set DATABASE_URL to use PostgreSQL backend, otherwise falls back to filesystem
     database_url: str | None = None
 
-    # Rutas de archivos
+    # File paths
     storage_dir: str = "storage"
     plants_file: str = "storage/plants.parquet"
     facility_outages_file: str = "storage/facility_outages.parquet"
     us_outages_file: str = "storage/us_outages.parquet"
     metadata_file: str = "storage/metadata.json"
 
-    # Paginación
+    # Pagination
     default_limit: int = 100
     max_limit: int = 1000
 
     valid_datasets: list[str] = ["facility", "us", "plants"]
 
 
-# Instancia global que se usa en toda la app
 settings = Settings()

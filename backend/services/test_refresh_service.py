@@ -57,7 +57,6 @@ class TestLockMechanism:
 
     def test_release_lock_when_no_lock(self, cleanup_lock):
         """Test release_lock doesn't fail when no lock exists."""
-        # Should not raise any exception
         release_lock()
         assert not LOCK_FILE.exists()
 
@@ -67,24 +66,18 @@ class TestStaleLocknRemoval:
 
     def test_stale_lock_removed_on_acquire(self, cleanup_lock):
         """Test that stale lock is removed when acquiring."""
-        # Create lock file
         LOCK_FILE.touch()
-        # Set modification time to far in the past (older than LOCK_TIMEOUT)
         old_time = time.time() - (LOCK_TIMEOUT + 100)
         os.utime(LOCK_FILE, (old_time, old_time))
 
-        # Should be able to acquire because lock is stale
         assert acquire_lock() is True
 
     def test_stale_lock_detected_by_is_extraction_in_progress(self, cleanup_lock):
         """Test that is_extraction_in_progress removes stale lock."""
-        # Create lock file
         LOCK_FILE.touch()
-        # Set modification time to far in the past
         old_time = time.time() - (LOCK_TIMEOUT + 100)
         os.utime(LOCK_FILE, (old_time, old_time))
 
-        # Should return False because lock is stale (will be removed)
         assert is_extraction_in_progress() is False
         assert not LOCK_FILE.exists()
 
@@ -140,7 +133,7 @@ class TestRunExtraction:
         assert result["status"] == "success"
         assert "message" in result
         mock_connector.assert_called_once()
-        assert not LOCK_FILE.exists()  # Lock released
+        assert not LOCK_FILE.exists()
 
     @patch("services.refresh_service.connector_main")
     def test_run_extraction_fails_if_already_locked(self, mock_connector, cleanup_lock):
@@ -160,7 +153,7 @@ class TestRunExtraction:
         with pytest.raises(ExtractionError):
             run_extraction()
 
-        assert not LOCK_FILE.exists()  # Lock released
+        assert not LOCK_FILE.exists()
 
     @patch("services.refresh_service.connector_main")
     def test_run_extraction_wraps_invalid_api_key_error(self, mock_connector, cleanup_lock):

@@ -101,7 +101,6 @@ class TestDataServicePagination:
     @patch("services.data_service.pd.read_parquet")
     def test_pagination_offset_and_limit(self, mock_read):
         """Test pagination respects offset and limit."""
-        # Create 20 records
         df = pd.DataFrame(
             {
                 "date": pd.date_range("2024-01-01", periods=20),
@@ -155,7 +154,6 @@ class TestDataServiceFacilityFiltering:
                 "percent_outage": [10.0, 10.0, 10.0],
             }
         )
-        # Mock returns facility data first, then handle merge with plants
         mock_read.side_effect = [df, FileNotFoundError()]
 
         result = DataService.get_dataset("facility", facility_id="F001")
@@ -185,7 +183,6 @@ class TestDataServiceFacilityFiltering:
 
         result = DataService.get_dataset("facility")
 
-        # Check if merge worked - should have plant_name column
         assert result["returned"] == 2
         record = result["data"][0]
         assert "plant_name" in record
@@ -210,7 +207,6 @@ class TestDataServiceFacilityFiltering:
 
         mock_read.side_effect = side_effect
 
-        # Should not raise, just return facility data without plant info
         result = DataService.get_dataset("facility")
 
         assert result["returned"] == 1

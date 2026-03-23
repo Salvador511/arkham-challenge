@@ -36,7 +36,6 @@ async def startup_extraction():
         logger.info("✅ Startup extraction successful")
         logger.info(f"Status: {result['status']}")
     except Exception as exc:
-        # Log error but don't crash the server
         logger.error(f"❌ Startup extraction failed: {exc}")
         logger.warning("Server is starting but data extraction failed")
 
@@ -49,10 +48,8 @@ async def lifespan(app: FastAPI):
     - Startup: Run data extraction
     - Shutdown: Cleanup (if needed)
     """
-    # Startup
     await startup_extraction()
     yield
-    # Shutdown
     logger.info("Server shutting down...")
 
 
@@ -83,5 +80,5 @@ app.include_router(refresh.router)
 
 @app.get("/health")
 async def health_check():
-    """Verifica que la API está funcionando"""
+    """Check API health status."""
     return {"status": "healthy", "version": settings.app_version}

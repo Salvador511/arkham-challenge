@@ -1,13 +1,9 @@
 """Unit tests for connector validation functions."""
 
-# Import from the connector module
 import sys
 from pathlib import Path
 
-# Agregar el path del connector para importar
 sys.path.insert(0, str(Path(__file__).parent / ".." / "connector"))
-
-# Después vamos a testear las funciones
 
 
 class TestValidateRecord:
@@ -15,8 +11,6 @@ class TestValidateRecord:
 
     def test_validate_record_with_all_fields(self):
         """Test that record with all required fields passes validation."""
-        # Esta función se encuentra en extract_data.py
-        # Vamos a importarla y testearla
         from connector.extract_data import validate_record
 
         record = {
@@ -38,7 +32,6 @@ class TestValidateRecord:
         record = {
             "date": "2024-01-01",
             "facility_id": "F001",
-            # missing facility_name
         }
         required_fields = ["date", "facility_id", "facility_name"]
 
@@ -51,7 +44,7 @@ class TestValidateRecord:
         record = {
             "date": "2024-01-01",
             "facility_id": "F001",
-            "facility_name": "",  # empty
+            "facility_name": "",
         }
         required_fields = ["date", "facility_id", "facility_name"]
 
@@ -64,7 +57,7 @@ class TestValidateRecord:
         record = {
             "date": "2024-01-01",
             "facility_id": "F001",
-            "facility_name": None,  # None
+            "facility_name": None,
         }
         required_fields = ["date", "facility_id", "facility_name"]
 
@@ -88,7 +81,6 @@ class TestExtractPlants:
 
         plants_df = extract_plants(sample_facility_dataframe)
 
-        # Should have 3 unique plants (F001, F002, F003)
         assert len(plants_df) == 3
         assert list(plants_df.columns) == ["facility_id", "facility_name"]
 
@@ -107,7 +99,6 @@ class TestExtractPlants:
 
         plants_df = extract_plants(sample_facility_dataframe)
 
-        # Check there are no duplicate facility_ids
         assert len(plants_df) == len(plants_df["facility_id"].unique())
 
 
@@ -120,7 +111,6 @@ class TestRunFullExtraction:
         """Test successful full extraction on first run."""
         from connector.extract_data import run_full_extraction
 
-        # Mock external dependencies
         mocker.patch("connector.extract_data.fetch_all_data")
         mocker.patch("connector.extract_data.transform_data")
         mocker.patch("connector.extract_data.extract_plants")
@@ -128,7 +118,6 @@ class TestRunFullExtraction:
         mocker.patch("connector.extract_data.save_final_output")
         mocker.patch("connector.extract_data.save_state")
 
-        # Setup mock side effects
         import connector.extract_data as extract_module
 
         extract_module.transform_data.side_effect = [
@@ -139,15 +128,12 @@ class TestRunFullExtraction:
             ["facility_id", "facility_name"]
         ].drop_duplicates()
 
-        # Call the function
         facility_df, us_df, plants_df = run_full_extraction("test_api_key")
 
-        # Verify it returns dataframes
         assert facility_df is not None
         assert us_df is not None
         assert plants_df is not None
 
-        # Verify save functions were called
         assert extract_module.save_delta.call_count == 3
         assert extract_module.save_final_output.called
         assert extract_module.save_state.called
@@ -162,7 +148,6 @@ class TestRunIncrementalExtraction:
         """Test incremental extraction with new data."""
         from connector.extract_data import run_incremental_extraction
 
-        # Mock external dependencies
         mocker.patch("connector.extract_data.fetch_last_data")
         mocker.patch("connector.extract_data.transform_data")
         mocker.patch("connector.extract_data.extract_plants")
@@ -188,11 +173,9 @@ class TestRunIncrementalExtraction:
 
         facility_df, us_df, plants_df = run_incremental_extraction("test_api_key", state)
 
-        # Verify it returns dataframes
         assert facility_df is not None
         assert us_df is not None
 
-        # Verify merge and vacuum were called
         assert extract_module.merge_dataframes.called
         assert extract_module.vacuum_delta.called
         assert extract_module.save_final_output.called
@@ -216,7 +199,6 @@ class TestRunIncrementalExtraction:
 
         facility_df, us_df, plants_df = run_incremental_extraction("test_api_key", state)
 
-        # Verify empty dataframes are returned
         assert len(facility_df) == 0
         assert len(us_df) == 0
 
@@ -230,7 +212,6 @@ class TestSaveFinalOutput:
         """Test saving final output from Delta tables."""
         from connector.extract_data import save_final_output
 
-        # Mock DeltaTable
         mock_delta_table = mocker.MagicMock()
         mock_delta_class = mocker.patch("connector.extract_data.DeltaTable")
         mock_delta_class.side_effect = [
@@ -245,13 +226,10 @@ class TestSaveFinalOutput:
             sample_plants_dataframe,
         ]
 
-        # Mock parquet saving
         mocker.patch("pandas.DataFrame.to_parquet")
 
-        # Call the function
         save_final_output("/delta/path", "/us/path", "/plants/path")
 
-        # Verify DeltaTable was created for each path
         assert mock_delta_class.call_count == 3
         assert mock_delta_table.to_pandas.call_count == 3
 
@@ -269,17 +247,14 @@ class TestSaveFinalOutput:
             mock_delta_table,
         ]
 
-        # Return empty dataframes
         mock_delta_table.to_pandas.side_effect = [
             pd.DataFrame(),
             pd.DataFrame(),
             pd.DataFrame(),
         ]
 
-        # Mock parquet saving
         mocker.patch("pandas.DataFrame.to_parquet")
 
-        # Call should not raise
         save_final_output("/delta/path", "/us/path", "/plants/path")
 
 

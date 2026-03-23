@@ -83,7 +83,6 @@ export const useApiInfiniteQuery = (
     facility_id?: string,
   } & Record<string, any>
 ) => {
-  // Construir query params
   const buildUrl = (offset: number) => {
     const params = new URLSearchParams()
     params.append('offset', String(offset))

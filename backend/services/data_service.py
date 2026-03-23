@@ -10,7 +10,6 @@ from exceptions import DataNotFoundError, ProcessingError, ValidationError
 
 logger = logging.getLogger(__name__)
 
-# Cache driver instance to avoid recreating table on every request
 _storage_driver_cache = None
 
 
@@ -27,9 +26,6 @@ def get_storage_driver():
 class DataService:
     """Service for loading and filtering parquet data"""
 
-    # Map public dataset names to internal storage names
-    # Public API uses: 'facility', 'us', 'plants'
-    # Storage uses: 'facility_outages', 'us_outages', 'plants'
     DATASET_NAME_MAP = {
         "facility": "facility_outages",
         "us": "us_outages",
@@ -47,16 +43,14 @@ class DataService:
         Args:
             dataset: Public dataset name ('facility', 'us', 'plants')
         """
-        # Map public name to storage name
         storage_name = DataService.DATASET_NAME_MAP.get(dataset)
         if not storage_name:
             raise ValidationError(f"Unknown dataset: {dataset}")
 
         if settings.database_url:
-            # Load from PostgreSQL (use cached driver)
             try:
                 driver = get_storage_driver()
-                df = driver.load(storage_name)  # ← Use storage name, not public name
+                df = driver.load(storage_name)
                 logger.debug("Loaded %s from PostgreSQL (%d rows)", dataset, len(df))
                 return df
 
@@ -67,7 +61,6 @@ class DataService:
                 raise ProcessingError("Failed to read dataset from database") from e
 
         else:
-            # Load from filesystem (default behavior)
             dataset_filepaths = {
                 "facility": settings.facility_outages_file,
                 "us": settings.us_outages_file,
@@ -107,7 +100,6 @@ class DataService:
         if limit > settings.max_limit:
             limit = settings.max_limit
 
-        # Validate date range
         if date_from and date_to:
             try:
                 date_from_obj = pd.to_datetime(date_from)
@@ -119,13 +111,11 @@ class DataService:
 
         storage_name = DataService.DATASET_NAME_MAP.get(dataset)
 
-        # Build filters and get data
         total_count = 0
         if settings.database_url:
             try:
                 driver = get_storage_driver()
 
-                # Build filters dict for efficient querying
                 filters = {}
                 if facility_id and dataset == "facility":
                     filters["facility_id"] = facility_id
@@ -137,13 +127,8 @@ class DataService:
                     elif date_to:
                         filters["date"] = ("1900-01-01", date_to)
 
-                # Load all filtered data (no pagination yet) to get total count
                 df = driver.query(storage_name, filters=filters if filters else None)
-
-                # Calculate total count BEFORE pagination
                 total_count = len(df)
-
-                # Now apply pagination on filtered data
                 df = df.iloc[offset : offset + limit]
 
                 logger.debug(
@@ -157,7 +142,6 @@ class DataService:
                 raise ProcessingError("Failed to read dataset from database") from e
 
         else:
-            # Filesystem fallback: load full dataset and filter in memory
             df = DataService._load_dataframe(dataset)
 
             has_date_column = "date" in df.columns
@@ -186,18 +170,13 @@ class DataService:
             if has_date_column:
                 df = df.sort_values("date", ascending=False)
 
-            # Get total count BEFORE pagination
             total_count = len(df)
-
-            # Apply pagination
             df = df.iloc[offset : offset + limit]
 
-        # Format response
         has_date_column = "date" in df.columns
         if has_date_column:
             df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
 
-        # Join with plants for facility dataset
         if dataset == "facility":
             try:
                 plants = DataService._load_dataframe("plants")

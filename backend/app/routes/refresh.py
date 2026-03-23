@@ -33,8 +33,6 @@ async def refresh_data(background_tasks: BackgroundTasks, response: Response):
     """
     try:
         result, status_code = trigger_extraction_async(background_tasks)
-
-        # Set the HTTP status code in the response
         response.status_code = status_code
 
         return result
