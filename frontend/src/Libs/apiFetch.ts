@@ -3,8 +3,6 @@ import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from '@tansta
 export const STALE_TIME_5M = 1000 * 60 * 5
 export const STALE_TIME_1M = 1000 * 60
 
-const FOUR_HUNDREDS = [400, 401, 403, 409, 500]
-
 type Methods = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
 export const apiFetch = async ({
@@ -26,23 +24,41 @@ export const apiFetch = async ({
     options.body = JSON.stringify(payload)
   }
   const response = await fetch(url, options)
-  if (FOUR_HUNDREDS.includes(response.status)) {
-    const data = await response.json()
-    throw data
+
+  if (!response.ok) {
+    let parsedError: any = null
+
+    try {
+      parsedError = await response.json()
+    } catch {
+      parsedError = null
+    }
+
+    throw {
+      status: response.status,
+      statusText: response.statusText,
+      message: parsedError?.message
+        || parsedError?.detail
+        || `API Error: ${response.status} ${response.statusText}`,
+      url,
+      ...parsedError,
+    }
   }
+
   const data = await response.json()
   return data
 }
 
 
 export const useApiQuery = (
-  { url, payload = {}, key, ...options }:
-  { url: string, payload?: any, key: string } & Record<string, any>
+  { url, payload = {}, key, ...queryOptions }:
+  { url: string, payload?: any, key: string | readonly unknown[] } & Record<string, any>
 ) => {
   return useQuery({
+    ...queryOptions,
     staleTime: STALE_TIME_5M,
-    queryKey: [key],
-    queryFn: () => apiFetch({ url, payload, method: 'GET', ...options }),
+    queryKey: Array.isArray(key) ? [...key] : [key],
+    queryFn: () => apiFetch({ url, payload, method: 'GET' }),
   })
 }
 
@@ -83,9 +99,10 @@ export const useApiInfiniteQuery = (
   }
 
   return useInfiniteQuery({
+    ...options,
     queryKey: [key, { dataset, date_from, date_to, facility_id }],
     queryFn: ({ pageParam = 0 }) => {
-      return apiFetch({ url: buildUrl(pageParam), method: 'GET', ...options })
+      return apiFetch({ url: buildUrl(pageParam), method: 'GET' })
     },
     getNextPageParam: lastPage => {
       const { offset, limit, total_count } = lastPage

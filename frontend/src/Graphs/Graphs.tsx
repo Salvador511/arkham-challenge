@@ -486,7 +486,7 @@ const Wrapper = () => {
     isLoading: isUsLoading,
     isError: isUsError,
   } = useApiQuery({
-    key: `graph-us-${dateFrom}-${dateTo}-${effectiveLimit}`,
+    key: ['graph', 'us', { dateFrom, dateTo, effectiveLimit, includeUs }],
     url: buildDataUrl({
       base: apiUrl,
       dataset: 'us',
@@ -494,6 +494,7 @@ const Wrapper = () => {
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
     }),
+    enabled: includeUs,
   })
 
   const facilities: Facility[] = facilitiesResponse?.data ?? []
@@ -502,7 +503,7 @@ const Wrapper = () => {
 
   const facilityQueries = useQueries({
     queries: selectedFacilities.map((facility: Facility) => ({
-      queryKey: ['graph-facility', facility.facility_id, dateFrom, dateTo, effectiveLimit],
+      queryKey: ['graph', 'facility', facility.facility_id, { dateFrom, dateTo, effectiveLimit }],
       queryFn: () =>
         apiFetch({
           method: 'GET',
@@ -521,9 +522,11 @@ const Wrapper = () => {
 
   const isFacilitySeriesLoading = facilityQueries.some(query => query.isLoading)
   const hasFacilitySeriesError = facilityQueries.some(query => query.isError)
+  const effectiveUsLoading = includeUs ? isUsLoading : false
+  const effectiveUsError = includeUs ? isUsError : false
 
   const chartRows = useMemo(() => {
-    const usData: USOutages[] = usResponse?.data ?? []
+    const usData: USOutages[] = includeUs ? (usResponse?.data ?? []) : []
 
     const rowsByDate = new Map<string, ChartRow>()
 
@@ -559,13 +562,13 @@ const Wrapper = () => {
       })
       return normalized
     })
-  }, [usResponse?.data, facilityQueries, selectedFacilities])
+  }, [includeUs, usResponse?.data, facilityQueries, selectedFacilities])
 
-  if (isFacilitiesLoading || isUsLoading || isFacilitySeriesLoading) {
+  if (isFacilitiesLoading || effectiveUsLoading || isFacilitySeriesLoading) {
     return <Loading />
   }
 
-  if (isFacilitiesError || isUsError || hasFacilitySeriesError) {
+  if (isFacilitiesError || effectiveUsError || hasFacilitySeriesError) {
     return <NotAvailable />
   }
 

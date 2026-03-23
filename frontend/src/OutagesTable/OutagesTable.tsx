@@ -1,11 +1,12 @@
 import RefreshIcon from '@mui/icons-material/Refresh'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Autocomplete, Button, TextField, Typography as T } from '@mui/material'
 import { styled } from '@mui/material/styles'
 import { useEffect, useRef, useState } from 'react'
 import getClassPrefixer from '~/UI/classPrefixer'
 import NotAvailable from '~/NotAvailable/NotAvailable'
 import Loading from '~/UI/Shared/Loading'
-import { useApiInfiniteQuery, useApiQuery, useApiMutation } from '~/Libs/apiFetch'
+import { apiFetch, useApiInfiniteQuery, useApiQuery } from '~/Libs/apiFetch'
 
 import type { SnackbarMessage } from '~/types/ui'
 import type { USOutages, FacilityOutages } from '~/types/outages'
@@ -314,6 +315,8 @@ type WrapperProps = {
 
 const Wrapper = ({ setSnackbarMessage, setIsGlobalRefreshing, type }: WrapperProps) => {
   const observerTarget = useRef<HTMLDivElement>(null)
+  const statusPollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const queryClient = useQueryClient()
   const dataset = type === 'usOutage' ? 'us' : 'facility'
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -323,7 +326,7 @@ const Wrapper = ({ setSnackbarMessage, setIsGlobalRefreshing, type }: WrapperPro
   const apiUrl = import.meta.env.VITE_API_BASE_URL
   const { data: facilitiesData, isLoading: isFacilitiesLoading, isError: isFacilitiesError } = useApiQuery({
     url: `${apiUrl}data?dataset=plants`,
-    key: 'facilities',
+    key: 'plants',
   })
 
   const facilities = type === 'facilityOutage' && facilitiesData?.data ? facilitiesData.data : []
@@ -338,11 +341,78 @@ const Wrapper = ({ setSnackbarMessage, setIsGlobalRefreshing, type }: WrapperPro
     facility_id: facilityId || undefined,
   })
 
-  const { mutate: refreshData } = useApiMutation({
-    url: `${apiUrl}refresh`,
-    method: 'POST',
-    keys: ['outages-usOutage', 'outages-facilityOutage', 'facilities'],
+  const refreshMutation = useMutation({
+    mutationFn: () => apiFetch({ url: `${apiUrl}refresh`, method: 'POST' }),
   })
+
+  const stopRefreshState = () => {
+    setIsRefreshing(false)
+    setIsGlobalRefreshing(false)
+    if (statusPollTimeoutRef.current !== null) {
+      clearTimeout(statusPollTimeoutRef.current)
+      statusPollTimeoutRef.current = null
+    }
+  }
+
+  const invalidateData = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ['outages-usOutage'] }),
+      queryClient.invalidateQueries({ queryKey: ['outages-facilityOutage'] }),
+      queryClient.invalidateQueries({ queryKey: ['plants'] }),
+      queryClient.invalidateQueries({ queryKey: ['graph'] }),
+    ])
+  }
+
+  const getBoundedPollDelayMs = (retryValue: unknown) => {
+    const serverRetry = Number(retryValue)
+    if (Number.isFinite(serverRetry) && serverRetry > 0) {
+      return Math.min(Math.max(serverRetry, 5), 15) * 1000
+    }
+    return 5000
+  }
+
+  const scheduleStatusPoll = (nextDelayMs = 5000) => {
+    if (statusPollTimeoutRef.current !== null) {
+      clearTimeout(statusPollTimeoutRef.current)
+    }
+
+    statusPollTimeoutRef.current = setTimeout(async () => {
+      try {
+        const statusResponse: any = await apiFetch({
+          url: `${apiUrl}refresh/status`,
+          method: 'GET',
+        })
+
+        if (statusResponse?.status === 'processing') {
+          const boundedNextDelayMs = getBoundedPollDelayMs(statusResponse?.retry_after_seconds)
+          scheduleStatusPoll(boundedNextDelayMs)
+          return
+        }
+
+        if (statusResponse?.status === 'idle') {
+          await invalidateData()
+          setSnackbarMessage({
+            message: 'Data extraction completed successfully',
+            severity: 'success',
+          })
+          stopRefreshState()
+          return
+        }
+
+        setSnackbarMessage({
+          message: 'Unexpected extraction status response',
+          severity: 'error',
+        })
+        stopRefreshState()
+      } catch (error: any) {
+        setSnackbarMessage({
+          message: error?.message || 'Error checking extraction status',
+          severity: 'error',
+        })
+        stopRefreshState()
+      }
+    }, nextDelayMs)
+  }
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -361,7 +431,15 @@ const Wrapper = ({ setSnackbarMessage, setIsGlobalRefreshing, type }: WrapperPro
     return () => observer.disconnect()
   }, [fetchNextPage, hasNextPage, isFetchingNextPage])
 
-  const allData = data?.pages.flatMap(page => page.data) ?? []
+  useEffect(() => {
+    return () => {
+      if (statusPollTimeoutRef.current !== null) {
+        clearTimeout(statusPollTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const allData = data?.pages.flatMap(page => page.data ?? []).filter(Boolean) ?? []
   const hasContentError = isError || isFacilitiesError || allData.length === 0
 
   if (isLoading || isFacilitiesLoading) return <Loading />
@@ -369,31 +447,38 @@ const Wrapper = ({ setSnackbarMessage, setIsGlobalRefreshing, type }: WrapperPro
   const handleRefresh = () => {
     setIsRefreshing(true)
     setIsGlobalRefreshing(true)
-    refreshData(undefined, {
-      onSuccess: (response: any) => {
+    refreshMutation.mutate(undefined, {
+      onSuccess: async (response: any) => {
         const { extraction_type, status, retry_after_seconds } = response
 
         if (status === 'processing') {
+          let extractionLabel = 'Data'
+          if (extraction_type === 'full') {
+            extractionLabel = 'Full'
+          } else if (extraction_type === 'incremental') {
+            extractionLabel = 'Incremental'
+          }
+
           setSnackbarMessage({
-            message: `${extraction_type === 'full' ? 'Full' : 'Incremental'} data extraction started. This may take a few minutes...`,
+            message: `${extractionLabel} extraction in progress. This may take a few minutes...`,
             severity: 'info'
           })
-          if (extraction_type === 'full' && retry_after_seconds) {
-            setTimeout(() => {
-              setIsRefreshing(false)
-              setIsGlobalRefreshing(false)
-            }, retry_after_seconds * 1000)
-          } else {
-            setIsRefreshing(false)
-            setIsGlobalRefreshing(false)
-          }
+
+          const initialDelayMs = getBoundedPollDelayMs(retry_after_seconds)
+          scheduleStatusPoll(initialDelayMs)
         } else if (status === 'success') {
+          await invalidateData()
           setSnackbarMessage({
             message: `${extraction_type === 'incremental' ? 'Incremental' : 'Full'} data extraction completed successfully`,
             severity: 'success'
           })
-          setIsRefreshing(false)
-          setIsGlobalRefreshing(false)
+          stopRefreshState()
+        } else {
+          setSnackbarMessage({
+            message: 'Unexpected refresh response',
+            severity: 'error'
+          })
+          stopRefreshState()
         }
       },
       onError: (error: any) => {
@@ -402,8 +487,7 @@ const Wrapper = ({ setSnackbarMessage, setIsGlobalRefreshing, type }: WrapperPro
           message: error?.message || 'Error refreshing data',
           severity: 'error'
         })
-        setIsRefreshing(false)
-        setIsGlobalRefreshing(false)
+        stopRefreshState()
       }
     })
   }
